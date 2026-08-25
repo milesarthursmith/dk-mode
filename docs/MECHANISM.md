@@ -106,6 +106,11 @@ downstream filters remove it, and auto-approval needs repetition before
 anything steers behaviour. A missed correction is invisible forever. So both
 tiers err toward catching too much.
 
+**Context travels with the correction.** "you didn't run the tests" is
+useless six weeks later without what it was answering, so each captured
+entry carries the exchange that led up to it. The consolidator cannot tell a
+real failure mode from a passing remark otherwise.
+
 **Tier 2 still cannot invent.** The model returns message **ids**; the script
 copies the text out of the transcript. It reports *where* the steering was,
 never *what was said*.
@@ -155,6 +160,13 @@ almost nothing. Latency on every single message would cost everything.
 
 The relevance layer is handed a numbered list of rules and returns **ids
 only**. The rendering is done by the script from `dk_rules.md`.
+
+Each injected item is rendered as a short episode - what it looks like, what
+to do, and the words that earned it - not a bare imperative. That is
+affordable precisely because injection is now selective: when the note went
+out on every prompt it had to be tiny or it became wallpaper; when it goes
+out only for what is live, the few items that appear can carry their
+evidence.
 
 ```mermaid
 flowchart LR

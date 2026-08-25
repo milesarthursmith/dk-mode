@@ -552,6 +552,10 @@ run_watch "$FIX/transcript_doneclaim.jsonl"; stop_mock
 if grep -q "never say a check passed unless you ran it this turn" "$SB/.claude/memory/.dk_active" \
    && grep -q "Relevant to what you are doing right now" "$SB/.claude/memory/.dk_active"; then ok; else bad "active: $(cat "$SB/.claude/memory/.dk_active" 2>/dev/null)"; fi
 
+t "53b. a live item is rendered as an episode: what it looks like, what to do, what earned it"
+a="$SB/.claude/memory/.dk_active"
+if grep -q "what it looks like:" "$a" && grep -q "so: " "$a" && grep -q "earned by:" "$a"; then ok; else bad "$(cat "$a")"; fi
+
 t "54. recall prefers the live selection over the static note"
 out=$(run_recall)
 if printf '%s' "$out" | grep -q "never say a check passed unless you ran it this turn" \
@@ -727,6 +731,26 @@ if [ "$(lines "$RAW")" = "3" ] \
    && grep -q '"signal": "semantic"' "$RAW" \
    && grep -qF "shit way to test" "$RAW" \
    && grep -q "| dk-capture | 3 semantic entries (read, not matched)" "$MEMLOG"; then ok; else bad "raw: $(cat "$RAW")"; fi
+
+t "73a. a captured correction carries the exchange that led to it"
+sandbox; echo k > "$KEYF"
+uid=$(python3 -c "
+import json
+print([json.loads(l)['uuid'] for l in open('$FIX/transcript_correction.jsonl') if json.loads(l)['type']=='user'][-1])")
+start_watch_mock "{\"active\":[],\"alert\":null,\"steering\":[{\"id\":\"$uid\",\"kind\":\"correction\"}]}"
+runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_correction.jsonl"
+stop_mock
+# the fixture's assistant turn claimed "All 12 tests pass" before the correction
+if grep -q "All 12 tests pass" "$RAW" && grep -q '"signal": "semantic"' "$RAW"; then ok; else bad "no context: $(cat "$RAW")"; fi
+
+t "73b. empty model content (thinking model burning its budget) writes nothing, clobbers nothing"
+sandbox; echo k > "$KEYF"; printf 'PREVIOUS\n' > "$SB/.claude/memory/.dk_active"
+start_watch_mock ''
+runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_correction.jsonl"
+stop_mock
+if [ "$(cat "$SB/.claude/memory/.dk_active")" = "PREVIOUS" ] && [ ! -s "$RAW" ]; then ok; else bad "active=$(cat "$SB/.claude/memory/.dk_active")"; fi
 
 t "74. semantic capture cannot invent text - unknown ids are dropped"
 sandbox; echo k > "$KEYF"

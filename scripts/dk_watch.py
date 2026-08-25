@@ -64,9 +64,14 @@ ACTIVE = os.path.join(MEM, ".dk_active")
 LOCK = os.path.join(MEM, ".dk-watch.lock")
 
 BACKEND = os.environ.get("DK_BACKEND", "anthropic").strip().lower()
-# Thinking models (qwen3, deepseek-r1) burn the whole budget on reasoning and
-# return empty content - fatal here, where max_tokens is only 400.
+# Thinking models (qwen3, deepseek-r1) spend the budget on reasoning and
+# return EMPTY content - a silent total failure, not a degraded one. Two
+# defences, because the env var only helps someone who knew to set it:
+# "none" turns reasoning off where the server supports it, and the budget is
+# no longer knife-edge. The reply is a few dozen tokens of JSON; 400 was an
+# arbitrary cap that left no room for any preamble at all.
 REASONING_EFFORT = os.environ.get("DK_REASONING_EFFORT", "").strip()
+MAX_TOKENS = int(os.environ.get("DK_WATCH_MAX_TOKENS", "2000"))
 API_URL = os.environ.get(
     "DK_API_URL",
     "http://localhost:11434/v1/chat/completions" if BACKEND == "openai"
@@ -125,6 +130,7 @@ def load_rules():
             "heading": block.splitlines()[0].lstrip("# ").strip(),
             "looks_like": field(block, "What it looks like"),
             "reminder": reminder,
+            "evidence": field(block, "Evidence"),
         })
     return out
 
@@ -217,7 +223,7 @@ Reply with ONLY a JSON object, no prose, no code fences:
 def call_model(key, prompt):
     for model in WATCH_MODELS:
         if BACKEND == "openai":
-            body = {"model": model, "max_tokens": 400, "temperature": 0,
+            body = {"model": model, "max_tokens": MAX_TOKENS, "temperature": 0,
                     "stream": False,
                     "messages": [{"role": "user", "content": prompt}]}
             if REASONING_EFFORT:
@@ -226,7 +232,7 @@ def call_model(key, prompt):
             if key:
                 headers["authorization"] = f"Bearer {key}"
         else:
-            body = {"model": model, "max_tokens": 400, "temperature": 0,
+            body = {"model": model, "max_tokens": MAX_TOKENS, "temperature": 0,
                     "messages": [{"role": "user", "content": prompt}]}
             headers = {"content-type": "application/json", "x-api-key": key,
                        "anthropic-version": "2023-06-01"}
@@ -253,7 +259,17 @@ def write_steering(selection, convo, raw_path, memlog):
     """Log steering the model spotted. It supplies an ID and a kind; the
     TEXT is copied verbatim from the transcript, so the model can no more
     invent what the user said than it can invent a rule."""
-    by_id = {m["uuid"]: m for m in convo if m["role"] == "user"}
+    # A correction without what it was correcting is unusable later - the
+    # consolidator cannot tell a real failure mode from a passing remark.
+    # So carry the exchange that led up to it, not just the words.
+    by_id = {}
+    for i, m in enumerate(convo):
+        if m["role"] != "user":
+            continue
+        lead = []
+        for prev in convo[max(0, i - 3):i]:
+            lead.append(f'[{prev["role"]}] {prev["text"][:900]}')
+        by_id[m["uuid"]] = dict(m, lead_up="\n\n".join(lead)[-2400:])
     try:
         with open(raw_path, encoding="utf-8", errors="replace") as f:
             seen = f.read()
@@ -278,7 +294,7 @@ def write_steering(selection, convo, raw_path, memlog):
             "signal": "semantic",      # found by reading, not by phrase match
             "text": msg["text"][:600],
             "user_verbatim": msg["text"][:600],
-            "assistant_context": "",
+            "assistant_context": msg.get("lead_up", ""),
             "cwd": msg["cwd"],
         })
     if not new:
@@ -333,16 +349,31 @@ def parse_selection(text, rules):
 
 
 def render(active_ids, alert, rules):
+    """Render the live items as short episodes, not one-liners.
+
+    When the note was injected on EVERY prompt it had to be tiny or it
+    became noise. It is now injected only when something is actually live -
+    usually nothing at all - so the budget is better spent making the few
+    items that do appear carry their evidence: what it looks like, what to
+    do, and the words that earned the rule. A bare imperative is easy to
+    skim past; the episode behind it is not."""
     by_id = {r["id"]: r for r in rules}
-    lines = []
+    parts = []
     if alert:
-        lines.append(f"- {alert.strip()}")
+        parts.append(f"! {alert.strip()}")
     for i in active_ids:
-        lines.append(f"- {by_id[i]['reminder']}")
-    if not lines:
+        r = by_id[i]
+        block = [f"* {r['heading']}"]
+        if r.get("looks_like"):
+            block.append(f"    what it looks like: {r['looks_like'][:240]}")
+        block.append(f"    so: {r['reminder']}")
+        if r.get("evidence"):
+            block.append(f"    earned by: {r['evidence'][:240]}")
+        parts.append("\n".join(block))
+    if not parts:
         return ""      # nothing live: inject nothing at all
     return ("<self-steering>\nRelevant to what you are doing right now:\n"
-            + "\n".join(lines) + "\n</self-steering>\n")
+            + "\n".join(parts) + "\n</self-steering>\n")
 
 
 def atomic_write(path, text):

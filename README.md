@@ -129,7 +129,9 @@ to paste by hand and still succeeds. `--no-hooks` skips registration
 entirely; `--update` re-pins the vendor copy to the newest tag. Re-running
 is always safe: it never overwrites existing memory.
 
-Then mine your history:
+**Start by mining, always.** An empty rules file steers nothing, and the
+loop cannot learn what it never saw — so the first thing any install should
+do is read the history that already exists:
 
 ```bash
 .claude/vendor/dk-mode/scripts/dk_backfill.sh --target /path/to/your/project
@@ -152,6 +154,9 @@ string in settings.json to scope them per-project):
 | `DK_WATCH` | `1` | The relevance layer. `0` disables it — recall then injects the static note on every prompt (the dumb mode). |
 | `DK_WATCH_MODELS` | `claude-haiku-4-5-20251001` hosted / your local model | Selection is a fast cheap judgment, unlike consolidation — separate knob on purpose. |
 | `DK_WATCH_TURNS` | `6` | How many recent messages the relevance layer reads. |
+| `DK_WATCH_MAX_TOKENS` | `2000` | Reply budget for the relevance call. Was 400, which left a reasoning model no room to answer at all — it returned empty content on every call, a silent total failure. |
+| `DK_REASONING_EFFORT` | unset | Passed to an OpenAI-compatible server (`none` turns thinking off). Belt to `DK_WATCH_MAX_TOKENS`'s braces for local thinking models. |
+| `DK_BATCH` | `200` | Entries per consolidation batch. Lower it for a small local model. |
 | `DK_ACTIVE_TTL` | `3600` | Seconds a live selection stays valid before recall falls back to the static note. |
 | `DK_INTERVAL` | `7d` | Consolidation cadence: `Nd`/`Nh`/`Nm`, bare seconds, or `per-turn`/`always`/`0` for every prompt (for cost-insensitive background/autonomous agents). |
 | `DK_APPROVAL` | `0` | `0` off, `1` a human approves everything, `auto` repetition approves it (see **Running with nobody watching**). When on, new items land as `Status: pending`, are HELD OUT of the injected note (the validator rejects any consolidation that leaks a pending reminder line into it), and each prompt gets a one-line nudge. Review with `/dk-review` (or `scripts/dk_review.py --list/--approve/--reject` — approval rebuilds the note immediately, rejection preserves the item under Retired). Turn off once the consolidator has earned trust. |
