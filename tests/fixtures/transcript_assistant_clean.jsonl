@@ -1,0 +1,2 @@
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I should have the report ready shortly - here is the plan, then I will run the build."}]},"uuid":"c-1","isSidechain":false}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Build finished cleanly and the deploy is live."}]},"uuid":"c-2","isSidechain":false}

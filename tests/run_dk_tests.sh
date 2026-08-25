@@ -627,6 +627,65 @@ backfill_kicked=$([ -f "$SB/watched" ] && echo yes || echo no)
 if [ "$kicked" = "yes" ] && [ "$backfill_kicked" = "no" ]; then ok; else bad "live=$kicked backfill=$backfill_kicked"; fi
 
 # =============================================================================
+echo "== autonomous operation (no human in the loop) =="
+
+t "64. self-correction in an agent's own chat is captured (source=self), no human message needed"
+sandbox; run_capture "$FIX/transcript_autonomous.jsonl"
+if [ "$(lines "$RAW")" = "1" ] \
+   && grep -q '"source": "self"' "$RAW" \
+   && grep -q '"kind": "self-correction"' "$RAW" \
+   && grep -qF "I never ran the court gate" "$RAW"; then ok; else bad "raw: $(cat "$RAW")"; fi
+
+t "65. ordinary assistant chatter is not mistaken for self-correction"
+sandbox; run_capture "$FIX/transcript_assistant_clean.jsonl"
+if [ ! -s "$RAW" ]; then ok; else bad "raw: $(cat "$RAW")"; fi
+
+t "66. dk_signal records a machine steering event, dedupes identical repeats"
+sandbox
+runenv python3 "$SCRIPTS/dk_signal.py" --kind verdict --source court \
+  --text "FIX: heading promises a calculator the page does not contain" \
+  --context "shipped /heating-costs" --target heating-costs
+runenv python3 "$SCRIPTS/dk_signal.py" --kind verdict --source court \
+  --text "FIX: heading promises a calculator the page does not contain" \
+  --context "shipped /heating-costs" --target heating-costs
+if [ "$(lines "$RAW")" = "1" ] && grep -q '"source": "court"' "$RAW" \
+   && grep -q '"target": "heating-costs"' "$RAW" \
+   && grep -q "| dk-signal | court/verdict" "$MEMLOG"; then ok; else bad "raw: $(cat "$RAW")"; fi
+
+t "67. dk_signal is a no-op (exit 0) where dk-mode is not installed"
+out=$(CLAUDE_PROJECT_DIR="$TMPBASE/nowhere" python3 "$SCRIPTS/dk_signal.py" --text "x" 2>&1); rc=$?
+if [ "$rc" = "0" ] && [ -z "$out" ]; then ok; else bad "rc=$rc out: $out"; fi
+
+t "68. DK_APPROVAL=auto promotes a pending item at the count threshold and rebuilds the note"
+consolidate_sandbox; cp "$FIX/rules_auto_approve.md" "$RULES"
+start_mock rewritten_rules_auto.md
+runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" DK_APPROVAL=auto \
+  python3 "$SCRIPTS/dk_consolidate.py"
+stop_mock
+# fixture response carries Count 3 on the rabbit-holing item -> auto-approved
+note=$(sed -n '/<!-- inject:start -->/,/<!-- inject:end -->/p' "$RULES")
+if grep -A2 "Rabbit-holing" "$RULES" | grep -q '\*\*Status:\*\* approved' \
+   && printf '%s' "$note" | grep -q "step back and check"; then ok; else bad "note: $note"; fi
+
+t "69. DK_APPROVAL=auto leaves a low-count item pending (repetition is the evidence)"
+if grep -A2 "Check MEMORY.md before building" "$RULES" | grep -q '\*\*Status:\*\* pending' \
+   && ! printf '%s' "$note" | grep -q "always check MEMORY.md"; then ok; else bad "$(grep -A3 'Check MEMORY' "$RULES")"; fi
+
+t "70. end to end with no human: self-correction -> consolidation -> live injection"
+sandbox; echo k > "$KEYF"
+run_capture "$FIX/transcript_autonomous.jsonl" DK_WATCH=0
+captured=$(lines "$RAW")
+cp "$FIX/rules_mixed_approval.md" "$RULES"
+start_watch_mock '{"active":[1],"alert":"You said checks passed without running the gate."}'
+runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_autonomous.jsonl"
+stop_mock
+out=$(run_recall)
+if [ "$captured" = "1" ] \
+   && printf '%s' "$out" | grep -q "without running the gate" \
+   && printf '%s' "$out" | grep -q "never say a check passed"; then ok; else bad "out: $out"; fi
+
+# =============================================================================
 # Live test: real key, real endpoint, real model judgment. Opt-in.
 if [ "${1:-}" = "--live" ]; then
   echo "== live (real API) =="

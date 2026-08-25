@@ -74,7 +74,15 @@ DEFAULT_URL = ("http://localhost:11434/v1/chat/completions" if BACKEND == "opena
 API_URL = os.environ.get("DK_API_URL", DEFAULT_URL)
 # Approval ("training wheels") mode: new items land as pending and are held
 # out of the inject note until a human approves them via dk_review.py.
-APPROVAL = os.environ.get("DK_APPROVAL", "0").strip().lower() in ("1", "true", "yes", "on")
+_APPROVAL_RAW = os.environ.get("DK_APPROVAL", "0").strip().lower()
+# off | on (a human approves everything) | auto (repetition approves it).
+# "auto" is what makes the loop work with nobody watching: one incident may
+# be noise, but the same failure recurring N times across sessions has
+# proven itself without a human needing to agree. A human can still
+# override anything via dk_review.py.
+APPROVAL = _APPROVAL_RAW in ("1", "true", "yes", "on", "auto")
+AUTO_APPROVE = _APPROVAL_RAW == "auto"
+AUTO_APPROVE_COUNT = int(os.environ.get("DK_AUTO_APPROVE_COUNT", "3"))
 DEFAULT_MODELS = ("qwen2.5:14b-instruct" if BACKEND == "openai"
                   else "claude-fable-5,claude-opus-5")
 MODELS = [m.strip() for m in
@@ -200,10 +208,21 @@ def read_key():
 
 
 PROMPT_TEMPLATE = """You maintain the long-term steering-memory file for a \
-Claude Code workspace. The raw entries below are things {user_ref} actually \
-said, captured verbatim, each tagged with a first-guess kind (correction = \
-Claude got something wrong; instruction = a standing rule or preference) and \
-the tail of what Claude had just said for context.
+Claude Code workspace. The raw entries below are STEERING EVENTS captured \
+verbatim - moments where the agent was told, by someone or something, that \
+it had gone wrong or must do something differently. Each carries the tail of \
+what the agent had just said, plus a `source` and a first-guess `kind`:
+
+- source "human": {user_ref} said it. The strongest evidence there is.
+- source "self": the agent corrected ITSELF mid-conversation ("I was
+  wrong", "that didn't work"). Real evidence of a failure mode, but weaker -
+  a plan changing course is not always a mistake worth remembering.
+- any other source (a verifier, a test gate, a review agent, CI): a machine
+  steered it. Treat a specific, repeated complaint as strong evidence and a
+  one-off environment error (a flaky network call, a missing key) as noise.
+
+kind: correction / instruction (a standing rule or preference) /
+self-correction / verdict / test-failure / review.
 
 Sort each new entry:
 (a) A repeat of an existing Mistake Pattern or Standing Rule -> increment its \
@@ -214,9 +233,10 @@ evidence is clearer.
 (c) A standing instruction or preference -> a new or updated item under \
 ## Standing Rules.
 (d) A durable fact worth keeping -> ## Facts.
-(e) A one-off, or a false positive (the message was not actually a \
-correction or instruction - e.g. the user quoting someone, or ordinary task \
-wording that tripped the capture filter) -> discard it silently.
+(e) A one-off, or a false positive -> discard it silently. Be strict here,
+especially for machine sources: ordinary iteration (a test failing then
+being fixed, a plan being revised, a transient tool error) is NOT a mistake
+pattern. Only recurring, avoidable failures earn an item.
 
 Hard constraints:
 - NEVER invent a mistake, rule or fact the user's words do not show. Quote \
@@ -360,6 +380,42 @@ def validate(text):
     return None
 
 
+def auto_approve(text):
+    """Promote pending items that have recurred enough to speak for
+    themselves, then rebuild the note deterministically so the promotion
+    takes effect immediately rather than a cycle later. The note is rebuilt
+    by dk_review's renderer - one definition of that logic, not two."""
+    promoted = []
+
+    def bump(m):
+        block = m.group(0)
+        if not re.search(r"\*\*Status:\*\*\s*pending", block):
+            return block
+        c = re.search(r"\*\*Count:\*\*\s*(\d+)", block)
+        if not c or int(c.group(1)) < AUTO_APPROVE_COUNT:
+            return block
+        promoted.append(block.splitlines()[0].lstrip("# ").strip())
+        return re.sub(r"(\*\*Status:\*\*\s*)pending", r"\1approved",
+                      block, count=1)
+
+    retired_at = text.find("## Retired")
+    head = text if retired_at < 0 else text[:retired_at]
+    tail = "" if retired_at < 0 else text[retired_at:]
+    head = re.sub(r"^### .*?(?=^### |^## |\Z)", bump, head, flags=re.M | re.S)
+    text = head + tail
+    if not promoted:
+        return text
+    try:
+        sys.path.insert(0, SCRIPT_DIR)
+        import dk_review
+        text = dk_review.rebuild_note(text)
+    except Exception as e:                       # never lose the promotion
+        log_error(f"auto-approve rendered note fallback: {e}")
+    log_error("auto-approved (count >= "
+              f"{AUTO_APPROVE_COUNT}): {'; '.join(promoted)}")
+    return text
+
+
 def run_batch(key):
     """Consolidate one batch. Returns (processed_count, note_items, model)
     or raises via fail() on error. Returns (0, 0, None) when nothing is
@@ -400,6 +456,10 @@ def run_batch(key):
                   f"consolidated_through: {new_done}", text, count=1, flags=re.M)
     text = re.sub(r"^last_verified:.*$",
                   f"last_verified: {TODAY}", text, count=1, flags=re.M)
+    # Promote anything that has now recurred enough to approve itself -
+    # BEFORE the write, or the promotion exists only in memory.
+    if AUTO_APPROVE:
+        text = auto_approve(text)
     if not text.endswith("\n"):
         text += "\n"
 

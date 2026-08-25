@@ -14,12 +14,19 @@ the loop self-steering instead - the system, not the model's judgment,
 decides what gets recalled:
 
 1. **Capture** (Stop hook) — after each turn, a regex pass over the
-   transcript spots corrections ("you didn't run the tests", "that's not
-   what I asked") and standing instructions ("from now on always X",
-   "I prefer Y") and saves your VERBATIM words — plus what Claude had just
-   said — to an append-only log. Deliberately no LLM here: your words are
-   the ground truth, and asking the model to summarise its own mistake is
-   asking the least reliable narrator in the room.
+   transcript spots steering events and saves them VERBATIM — plus what the
+   agent had just said — to an append-only log. Three sources, tagged:
+   - `human` — you correcting it ("you didn't run the tests", "that's not
+     what I asked") or setting a rule ("from now on always X").
+   - `self` — the agent correcting *itself* mid-run ("I was wrong", "that
+     didn't work"). This is what makes the loop work in an agent's own
+     chats, where no human is present to correct anything.
+   - anything else — a verifier, test gate, review agent or CI pushing an
+     event through `dk_signal.py` (below).
+
+   Deliberately no LLM here: the steering text is the ground truth, and
+   asking the model to summarise its own mistake is asking the least
+   reliable narrator in the room.
 2. **Consolidate** (background, cadence configurable down to per-turn) — a
    strong model sorts new entries into Mistake Patterns / Standing Rules /
    Facts, merges repeats, discards false positives, and rewrites a small
@@ -46,7 +53,7 @@ decides what gets recalled:
    always-on rules. Also the watchdog: it announces in-context when capture
    has been silent 21+ days or consolidation has failed 3 runs straight — a
    notification nobody reads is not an alarm.
-5. **Backfill** — mine your PREVIOUS sessions. Claude Code keeps every
+5. **Backfill** — mine PREVIOUS sessions. Claude Code keeps every
    transcript at `~/.claude/projects/<project>/<session>.jsonl`;
    `dk_backfill.sh` sweeps them all through the exact same capture logic,
    so memory is seeded from real history instead of starting empty.
@@ -56,6 +63,43 @@ quoted verbatim with a date. Prior art: Reflexion (post-hoc self-critique
 prepended to later attempts), prospective reflection (plan checked against
 known error patterns before acting), Letta/MemGPT sleep-time agents (a
 second model curating what the first is forced to see).
+
+## Running with nobody watching
+
+Nothing in the loop needs a human. Capture picks up the agent's own
+self-corrections, consolidation and relevance run themselves, and approval
+has a mode where evidence rather than a person does the approving:
+
+```bash
+export DK_APPROVAL=auto        # a pattern approves itself once it recurs
+export DK_AUTO_APPROVE_COUNT=3 # ...this many times (default)
+```
+
+One incident may be noise; the same failure recurring three times across
+sessions has proven itself. Below the threshold an item stays pending and
+steers nothing, so a one-off never becomes a rule. You can still overrule
+anything with `/dk-review` — `auto` removes the dependency on you, it
+doesn't remove the veto.
+
+**Feeding it machine steering.** Anything that tells an agent it got
+something wrong is a steering event, and can report itself:
+
+```bash
+dk_signal.py --kind verdict --source court \
+  --text "FIX: heading promises a calculator the page does not contain" \
+  --context "shipped /heating-costs"
+```
+
+Wire it into a verifier, a ship gate, a failing-test handler, a review
+subagent. Those entries flow through the same consolidation as your own
+corrections, so a gate's repeated complaint becomes a standing rule exactly
+like your repeated correction does. It exits 0 even when dk-mode isn't
+installed — a telemetry call must never fail the pipeline reporting it.
+
+The consolidator is told to weight the sources differently (a human's
+correction is the strongest evidence, ordinary iteration like a test failing
+then being fixed is explicitly not a mistake pattern), and it discards
+one-offs.
 
 ## Install
 
@@ -99,7 +143,8 @@ string in settings.json to scope them per-project):
 | `DK_WATCH_TURNS` | `6` | How many recent messages the relevance layer reads. |
 | `DK_ACTIVE_TTL` | `3600` | Seconds a live selection stays valid before recall falls back to the static note. |
 | `DK_INTERVAL` | `7d` | Consolidation cadence: `Nd`/`Nh`/`Nm`, bare seconds, or `per-turn`/`always`/`0` for every prompt (for cost-insensitive background/autonomous agents). |
-| `DK_APPROVAL` | `0` | Approval ("training wheels") mode. When `1`, new items land as `Status: pending`, are HELD OUT of the injected note (the validator rejects any consolidation that leaks a pending reminder line into it), and each prompt gets a one-line nudge. Review with `/dk-review` (or `scripts/dk_review.py --list/--approve/--reject` — approval rebuilds the note immediately, rejection preserves the item under Retired). Turn off once the consolidator has earned trust. |
+| `DK_APPROVAL` | `0` | `0` off, `1` a human approves everything, `auto` repetition approves it (see **Running with nobody watching**). When on, new items land as `Status: pending`, are HELD OUT of the injected note (the validator rejects any consolidation that leaks a pending reminder line into it), and each prompt gets a one-line nudge. Review with `/dk-review` (or `scripts/dk_review.py --list/--approve/--reject` — approval rebuilds the note immediately, rejection preserves the item under Retired). Turn off once the consolidator has earned trust. |
+| `DK_AUTO_APPROVE_COUNT` | `3` | Occurrences before `DK_APPROVAL=auto` promotes a pending item. |
 | `DK_LOG_DIR` | `~/Library/Logs` or `~/.claude/logs` | Where consolidation error detail is written (never /tmp). |
 | `DK_SCAN_LINES` | `150` | Transcript lines the capture hook scans; `0` = whole file (what backfill uses). |
 | `DK_API_URL` | api.anthropic.com | Test override (the test suite points it at a local mock). |
@@ -135,9 +180,9 @@ backend by resetting `consolidated_through`.
 
 - `.claude/memory/dk.jsonl` — raw captures, one JSON per line, verbatim,
   append-only, never edited by machine. Each entry: `ts` (original message
-  time), `uuid` (dedupe), `source` (`human`; a future capture path may add
-  LLM-sourced steering events), `kind` (correction/instruction), `signal`,
-  `user_verbatim`, `assistant_context`, `cwd`.
+  time), `uuid` (dedupe), `source` (`human` / `self` / a machine source), `kind`
+  (correction / instruction / self-correction / verdict / test-failure /
+  review), `signal`, `text`, `assistant_context`, `cwd`.
 - `.claude/memory/dk_rules.md` — the distilled file: the inject block plus
   Mistake Patterns / Standing Rules / Facts / Retired, each item with
   verbatim Evidence, dates, a Count, and (in approval mode) a Status.
@@ -151,7 +196,7 @@ backend by resetting `consolidated_through`.
 ## Tests
 
 ```bash
-bash tests/run_dk_tests.sh          # 63 tests, sandboxed, no key/network
+bash tests/run_dk_tests.sh          # 70 tests, sandboxed, no key/network
 bash tests/run_dk_tests.sh --live   # + one real-API behavioral test
 ```
 

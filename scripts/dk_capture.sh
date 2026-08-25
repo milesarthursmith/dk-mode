@@ -58,7 +58,7 @@ SESSION="$(printf '%s' "$PAYLOAD" | grep -o '"session_id"[[:space:]]*:[[:space:]
 # applies the precise, user-message-only matching. Apostrophes are matched
 # as `.` so both ' and the curly variant hit. No hit -> done in single-digit
 # milliseconds, which is the common case on live turns.
-GUARD_RE="nope|wrong|i said|i told you|already told|already said|already asked|i asked you|not what i asked|that.s not what|why did|why didn.t|why would you|why are you|why aren.t you|you didn.t|you did not|you missed|you skipped|you ignored|you were supposed|you keep doing|did you actually|did you even|did you really|lazy|half.assed|sloppy|token gesture|still wrong|still broken|still doesn.t|still not fixed|read it properly|check again|try again|/challenge|remember th|for future reference|for next time|note for the future|from now on|going forward|in future|should always|should never|always do|always use|always check|never do|never use|i prefer|i.d rather|i like it when|rule:|new rule|hard rule|don.t ever|stop doing"
+GUARD_RE="nope|wrong|i said|i told you|already told|already said|already asked|i asked you|not what i asked|that.s not what|why did|why didn.t|why would you|why are you|why aren.t you|you didn.t|you did not|you missed|you skipped|you ignored|you were supposed|you keep doing|did you actually|did you even|did you really|lazy|half.assed|sloppy|token gesture|still wrong|still broken|still doesn.t|still not fixed|read it properly|check again|try again|/challenge|remember th|for future reference|for next time|note for the future|from now on|going forward|in future|should always|should never|always do|always use|always check|never do|never use|i prefer|i.d rather|i like it when|rule:|new rule|hard rule|don.t ever|stop doing|i was wrong|i made a mistake|my mistake|correction:|that didn.t work|that was wrong|i should have |scratch that|let me correct|i got that wrong|actually, that"
 if [ "$SCAN_LINES" = "0" ]; then
   grep -qiE "$GUARD_RE" "$TRANSCRIPT" 2>/dev/null || exit 0
 else
@@ -114,8 +114,24 @@ INSTRUCTION = [
     r"\brule:", r"\bnew rule\b", r"\bhard rule\b",
     r"\bdon.t ever\b", r"\bstop doing\b",
 ]
+# Steering does not only come from a human. In an autonomous session
+# (a routine, a background agent, a subagent chat) nobody is there to say
+# "you didn't run the tests" - but the agent still visibly corrects itself,
+# and that is the same signal from a different source. Captured as
+# source=self so the consolidator can weigh it accordingly. Programmatic
+# steering (a verifier, a test gate, a review subagent) comes in through
+# dk_signal.py instead of being guessed at here.
+SELF_CORRECTION = [
+    r"\bi was wrong\b", r"\bi made a mistake\b", r"\bmy mistake\b",
+    r"^correction:", r"\bthat didn.t work\b", r"\bthat was wrong\b",
+    r"\bi got that wrong\b", r"\bscratch that\b", r"\blet me correct\b",
+    r"\bi should have (?:done|run|ran|checked|used|read|asked|verified|tested|caught|noticed)\b",
+    r"\bactually, that.s (?:wrong|not right)\b",
+]
+
 CORRECTION = [re.compile(p, re.I) for p in CORRECTION]
 INSTRUCTION = [re.compile(p, re.I) for p in INSTRUCTION]
+SELF_CORRECTION = [re.compile(p, re.I | re.M) for p in SELF_CORRECTION]
 
 def text_of(msg):
     """Plain text of a transcript message; '' for tool_result-only content."""
@@ -161,8 +177,35 @@ for e in entries:
     etype = e.get("type")
     if etype == "assistant":
         t = text_of(e.get("message"))
-        if t:
-            last_assistant = t
+        if not t:
+            continue
+        prior = last_assistant
+        last_assistant = t
+        if e.get("isSidechain"):
+            continue
+        uuid = e.get("uuid", "")
+        if not uuid or uuid in seen:
+            continue
+        hit = None
+        for rx in SELF_CORRECTION:
+            m = rx.search(t)
+            if m:
+                hit = m.group(0).strip()
+                break
+        if not hit:
+            continue
+        seen.add(uuid)
+        new.append({
+            "ts": e.get("timestamp") or now_iso,
+            "session": session[:8] if session else "",
+            "uuid": uuid,
+            "source": "self",          # the agent steered itself
+            "kind": "self-correction",
+            "signal": hit,
+            "text": t[:600],
+            "assistant_context": prior[-500:],
+            "cwd": e.get("cwd", ""),
+        })
         continue
     if etype != "user" or e.get("isSidechain"):
         continue
@@ -199,7 +242,8 @@ for e in entries:
         "source": "human",
         "kind": kind,
         "signal": signal,
-        "user_verbatim": t[:600],
+        "text": t[:600],
+        "user_verbatim": t[:600],   # kept: existing data/tests use this name
         "assistant_context": last_assistant[-500:],
         "cwd": e.get("cwd", ""),
     })
