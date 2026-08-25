@@ -216,4 +216,16 @@ if new:
                 f'(signal: "{sig}") session {session[:8]}\n')
 PY
 
+# --- relevance layer -------------------------------------------------------
+# Kick the watcher: it reads the turn that just happened and writes the
+# selection the NEXT prompt will inject. Backgrounded and detached so turn
+# end is never delayed by an LLM call; silent no-op when no backend is
+# configured. Skipped during backfill (SCAN_LINES=0), where there is no
+# "right now" to be relevant to.
+if [ "$SCAN_LINES" != "0" ] && [ "${DK_WATCH:-1}" != "0" ]; then
+  nohup python3 "$(cd "$(dirname "$0")" && pwd)/dk_watch.py" "$TRANSCRIPT" \
+    >/dev/null 2>&1 &
+  disown 2>/dev/null || true
+fi
+
 exit 0

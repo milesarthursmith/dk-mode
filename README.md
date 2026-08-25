@@ -26,12 +26,27 @@ decides what gets recalled:
    (~100 token) reminder note. Its output is structurally validated before
    it replaces anything; the raw log is never modified, so any bad
    consolidation is recoverable.
-3. **Recall** (UserPromptSubmit hook) — the reminder note is pasted into
-   every prompt. Forced, not retrieved: the model cannot miss it or forget
-   to look. Also the watchdog: it announces in-context when capture has been
-   silent 21+ days or consolidation has failed 3 runs straight — a
+3. **Relevance** (`dk_watch.py`, background) — the point of the whole
+   thing. A model reads the turn that just happened and decides which of
+   the known failure modes are *live right now* — not true in general, but
+   about to be run into, judging from what the agent just said and what you
+   just asked. Most turns it selects nothing, which is the correct answer.
+   It can also emit one blunt situational alert ("you just said the tests
+   pass without running them this turn"). The model only **selects ids**;
+   the script renders the text from the rules file, so it can never invent
+   a rule, and in approval mode it can only pick items you approved.
+   Runs on the Stop hook, one turn behind, because an LLM call inside the
+   prompt path would stall every message by seconds — and a conversation's
+   situation persists across turns, so the lag costs nothing.
+4. **Recall** (UserPromptSubmit hook) — injects that live selection into the
+   prompt, instantly (a file read, never an LLM call). Forced, not
+   retrieved: the model cannot miss it or forget to look. Falls back to the
+   static top-5 note when the watcher is off, hasn't run yet, or its
+   selection has gone stale — so the system is never worse than
+   always-on rules. Also the watchdog: it announces in-context when capture
+   has been silent 21+ days or consolidation has failed 3 runs straight — a
    notification nobody reads is not an alarm.
-4. **Backfill** — mine your PREVIOUS sessions. Claude Code keeps every
+5. **Backfill** — mine your PREVIOUS sessions. Claude Code keeps every
    transcript at `~/.claude/projects/<project>/<session>.jsonl`;
    `dk_backfill.sh` sweeps them all through the exact same capture logic,
    so memory is seeded from real history instead of starting empty.
@@ -79,6 +94,10 @@ string in settings.json to scope them per-project):
 | `DK_MODELS` | `claude-fable-5,claude-opus-5` (hosted) / `qwen2.5:14b-instruct` (local) | Comma-separated, tried in order. |
 | `DK_TIMEOUT` | `180` hosted / `600` local | Seconds per request; local CPU inference is slow. |
 | `DK_USER_NAME` | unset | Your name, used in the consolidation prompt ("the user (Name)"). |
+| `DK_WATCH` | `1` | The relevance layer. `0` disables it — recall then injects the static note on every prompt (the dumb mode). |
+| `DK_WATCH_MODELS` | `claude-haiku-4-5-20251001` hosted / your local model | Selection is a fast cheap judgment, unlike consolidation — separate knob on purpose. |
+| `DK_WATCH_TURNS` | `6` | How many recent messages the relevance layer reads. |
+| `DK_ACTIVE_TTL` | `3600` | Seconds a live selection stays valid before recall falls back to the static note. |
 | `DK_INTERVAL` | `7d` | Consolidation cadence: `Nd`/`Nh`/`Nm`, bare seconds, or `per-turn`/`always`/`0` for every prompt (for cost-insensitive background/autonomous agents). |
 | `DK_APPROVAL` | `0` | Approval ("training wheels") mode. When `1`, new items land as `Status: pending`, are HELD OUT of the injected note (the validator rejects any consolidation that leaks a pending reminder line into it), and each prompt gets a one-line nudge. Review with `/dk-review` (or `scripts/dk_review.py --list/--approve/--reject` — approval rebuilds the note immediately, rejection preserves the item under Retired). Turn off once the consolidator has earned trust. |
 | `DK_LOG_DIR` | `~/Library/Logs` or `~/.claude/logs` | Where consolidation error detail is written (never /tmp). |
@@ -126,11 +145,13 @@ backend by resetting `consolidated_through`.
   zero-touch (no approve-each-memory chore); `DK_APPROVAL=1` adds the
   human sign-off gate for the training period.
 - `.claude/memory/.dk_state` — scheduling state (flat key=value).
+- `.claude/memory/.dk_active` — the current live selection, rewritten after
+  each turn by the relevance layer. Empty file = nothing is live right now.
 
 ## Tests
 
 ```bash
-bash tests/run_dk_tests.sh          # 52 tests, sandboxed, no key/network
+bash tests/run_dk_tests.sh          # 63 tests, sandboxed, no key/network
 bash tests/run_dk_tests.sh --live   # + one real-API behavioral test
 ```
 

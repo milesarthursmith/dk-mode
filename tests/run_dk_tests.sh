@@ -518,6 +518,115 @@ hosted_kicked=$([ -f "$SB/kicked" ] && echo yes || echo no)
 if [ "$local_kicked" = "yes" ] && [ "$hosted_kicked" = "no" ]; then ok; else bad "local=$local_kicked hosted=$hosted_kicked"; fi
 
 # =============================================================================
+echo "== relevance layer (dk_watch) =="
+
+start_watch_mock() {  # start_watch_mock '<json the model returns>'
+  local portf="$TMPBASE/wport.$RANDOM"
+  python3 "$TESTS/mock_watch_api.py" "$1" "$portf" &
+  MOCK_PID=$!
+  for _ in $(seq 1 50); do [ -s "$portf" ] && break; sleep 0.1; done
+  MOCK_PORT="$(cat "$portf")"
+}
+
+run_watch() {  # run_watch <transcript> [extra env...]
+  local tp="$1"; shift
+  runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" "$@" \
+    python3 "$SCRIPTS/dk_watch.py" "$tp"
+}
+
+watch_sandbox() { sandbox; cp "$FIX/rules_mixed_approval.md" "$RULES"; echo k > "$KEYF"; }
+
+t "53. selects only the live rule and renders its reminder (model picks, script renders)"
+watch_sandbox
+start_watch_mock '{"active":[1],"alert":null}'
+run_watch "$FIX/transcript_doneclaim.jsonl"; stop_mock
+# id 1 = first approved item in the fixture = "Claiming done without verifying"
+if grep -q "never say a check passed unless you ran it this turn" "$SB/.claude/memory/.dk_active" \
+   && grep -q "Relevant to what you are doing right now" "$SB/.claude/memory/.dk_active"; then ok; else bad "active: $(cat "$SB/.claude/memory/.dk_active" 2>/dev/null)"; fi
+
+t "54. recall prefers the live selection over the static note"
+out=$(run_recall)
+if printf '%s' "$out" | grep -q "never say a check passed unless you ran it this turn" \
+   && ! printf '%s' "$out" | grep -q "Self-steering - check before acting"; then ok; else bad "out: $out"; fi
+
+t "55. empty selection = nothing live -> injects NOTHING (not the static note)"
+watch_sandbox
+start_watch_mock '{"active":[],"alert":null}'
+run_watch "$FIX/transcript_doneclaim.jsonl"; stop_mock
+out=$(run_recall)
+if [ ! -s "$SB/.claude/memory/.dk_active" ] \
+   && ! printf '%s' "$out" | grep -q "self-steering"; then ok; else bad "out: $out"; fi
+
+t "56. a situational alert is injected above the rules"
+watch_sandbox
+start_watch_mock '{"active":[1],"alert":"You just said the tests pass without running them this turn."}'
+run_watch "$FIX/transcript_doneclaim.jsonl"; stop_mock
+if head -3 "$SB/.claude/memory/.dk_active" | grep -q "without running them this turn"; then ok; else bad "$(cat "$SB/.claude/memory/.dk_active")"; fi
+
+t "57. pending items can never be selected (ids cover approved only)"
+watch_sandbox
+# fixture has 1 approved + 2 pending; ask for ids 2 and 3 (out of range)
+start_watch_mock '{"active":[2,3],"alert":null}'
+run_watch "$FIX/transcript_doneclaim.jsonl"; stop_mock
+if [ ! -s "$SB/.claude/memory/.dk_active" ]; then ok; else bad "leaked: $(cat "$SB/.claude/memory/.dk_active")"; fi
+
+t "58. malformed model output -> nothing written, old selection left to expire"
+watch_sandbox; printf 'PREVIOUS
+' > "$SB/.claude/memory/.dk_active"
+start_watch_mock 'sure! here are the rules I think apply: probably all of them'
+run_watch "$FIX/transcript_doneclaim.jsonl"; stop_mock
+if [ "$(cat "$SB/.claude/memory/.dk_active")" = "PREVIOUS" ]; then ok; else bad "clobbered"; fi
+
+t "59. stale selection is ignored; recall falls back to the static note"
+watch_sandbox; printf '<self-steering>
+STALE
+</self-steering>
+' > "$SB/.claude/memory/.dk_active"
+backdate "$SB/.claude/memory/.dk_active" 1
+out=$(run_recall)
+if ! printf '%s' "$out" | grep -q "STALE" \
+   && printf '%s' "$out" | grep -q "Self-steering - check before acting"; then ok; else bad "out: $out"; fi
+
+t "60. no key on a hosted backend -> watcher no-ops, static note still injected"
+watch_sandbox; rm -f "$KEYF"
+MOCK_PORT=1 run_watch "$FIX/transcript_doneclaim.jsonl"
+out=$(run_recall)
+if [ ! -e "$SB/.claude/memory/.dk_active" ] \
+   && printf '%s' "$out" | grep -q "Self-steering - check before acting"; then ok; else bad "out: $out"; fi
+
+t "61. DK_WATCH=0 disables the layer entirely"
+watch_sandbox
+start_watch_mock '{"active":[1],"alert":null}'
+run_watch "$FIX/transcript_doneclaim.jsonl" DK_WATCH=0; stop_mock
+if [ ! -e "$SB/.claude/memory/.dk_active" ]; then ok; else bad "ran anyway"; fi
+
+t "62. watcher works against a local OpenAI-compatible server with no key"
+watch_sandbox; rm -f "$KEYF"
+start_watch_mock '{"active":[1],"alert":null}'
+runenv DK_BACKEND=openai \
+  DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/chat/completions" \
+  python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_doneclaim.jsonl"
+stop_mock
+if grep -q "never say a check passed" "$SB/.claude/memory/.dk_active"; then ok; else bad "active: $(cat "$SB/.claude/memory/.dk_active" 2>/dev/null)"; fi
+
+t "63. capture hook kicks the watcher (and not during backfill)"
+sandbox; cp "$FIX/rules_mixed_approval.md" "$RULES"; echo k > "$KEYF"
+mkdir -p "$SB/bin"
+cat > "$SB/bin/dk_watch.py" <<'STUB'
+import os, sys
+open(os.path.join(os.environ["CLAUDE_PROJECT_DIR"], "watched"), "w").write(sys.argv[1])
+STUB
+cp "$SCRIPTS/dk_capture.sh" "$SB/bin/dk_capture.sh"
+payload "$FIX/transcript_correction.jsonl" | runenv bash "$SB/bin/dk_capture.sh"
+for _ in $(seq 1 30); do [ -f "$SB/watched" ] && break; sleep 0.1; done
+kicked=$([ -f "$SB/watched" ] && echo yes || echo no)
+rm -f "$SB/watched"; : > "$RAW"
+payload "$FIX/transcript_correction.jsonl" | runenv DK_SCAN_LINES=0 bash "$SB/bin/dk_capture.sh"
+sleep 0.5
+backfill_kicked=$([ -f "$SB/watched" ] && echo yes || echo no)
+if [ "$kicked" = "yes" ] && [ "$backfill_kicked" = "no" ]; then ok; else bad "live=$kicked backfill=$backfill_kicked"; fi
+
+# =============================================================================
 # Live test: real key, real endpoint, real model judgment. Opt-in.
 if [ "${1:-}" = "--live" ]; then
   echo "== live (real API) =="

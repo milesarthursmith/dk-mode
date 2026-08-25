@@ -18,12 +18,16 @@
 #   capture hook silently dying).
 # - 3 consecutive FAILED consolidations -> "broken, not quiet" line.
 #
+# The relevance layer (dk_watch.py) decides WHICH rules apply to the live
+# conversation; this script just prints its verdict. See section 1.
+#
 # Deliberately NOT done here:
-# - No matching of the prompt text against memories in v1: the failure
-#   modes worth warning about ("about to claim done") do not correlate with
-#   the user's wording, so keyword matching is guessing dressed as
-#   precision. Forward path: the consolidator can render extra keyword-gated
-#   lines into the inject block later; this script never needs to change.
+# - No LLM call and no matching logic of its own. Relevance is decided by
+#   dk_watch.py one turn earlier (asynchronously, so it costs no latency
+#   here); this script only reads the result. Keyword-matching the user's
+#   prompt was rejected deliberately: the failure modes worth warning about
+#   ("about to claim done") correlate with what the AGENT is doing, not with
+#   the user's wording.
 # - Never blocks: every path exits 0.
 #
 # Config (all optional):
@@ -46,16 +50,36 @@ RAW="$MEM/dk.jsonl"
 STATE="$MEM/.dk_state"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# 1. The note: everything between the inject markers, markers stripped.
-#    File or block missing -> print nothing (silent no-op).
-if [ -r "$RULES" ]; then
-  sed -n '/<!-- inject:start -->/,/<!-- inject:end -->/p' "$RULES" 2>/dev/null \
-    | grep -v -- '<!-- inject:' || true
-fi
-
 # Portable mtime. GNU form FIRST: on Linux `stat -f %m` does not fail, it
 # prints filesystem info; on macOS `-c` errors and `-f %m` runs.
 mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; }
+
+# 1. What to inject. Two tiers:
+#    a) the LIVE selection written by dk_watch.py after the previous turn -
+#       only the rules the relevance layer judged applicable to what is
+#       actually happening (often nothing, which is correct);
+#    b) the static distilled note, when the watcher is off, has not run yet,
+#       or its selection has gone stale.
+#    (a) is preferred because a rule injected on every prompt is background
+#    noise by turn 40; a rule injected at the moment it applies is a
+#    challenge. Both paths are file reads - never an LLM call in the hot
+#    path.
+ACTIVE="$MEM/.dk_active"
+TTL="${DK_ACTIVE_TTL:-3600}"
+injected=no
+if [ -r "$ACTIVE" ]; then
+  amt=$(mtime "$ACTIVE")
+  if [ "$amt" -gt 0 ] && [ $(( $(date +%s) - amt )) -lt "$TTL" ]; then
+    # A fresh but EMPTY selection is a real answer: nothing is live, inject
+    # nothing. Only an absent/stale file falls through to the static note.
+    [ -s "$ACTIVE" ] && cat "$ACTIVE"
+    injected=yes
+  fi
+fi
+if [ "$injected" = "no" ] && [ -r "$RULES" ]; then
+  sed -n '/<!-- inject:start -->/,/<!-- inject:end -->/p' "$RULES" 2>/dev/null \
+    | grep -v -- '<!-- inject:' || true
+fi
 
 state_get() { grep "^$1=" "$STATE" 2>/dev/null | head -1 | cut -d= -f2 || true; }
 
