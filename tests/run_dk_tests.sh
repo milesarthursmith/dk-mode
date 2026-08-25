@@ -149,6 +149,14 @@ run_capture "$FIX/transcript_correction.jsonl"; rc=$?
 if [ "$rc" = "0" ] && [ ! -s "$RAW" ]; then ok; else bad "rc=$rc"; fi
 rmdir "$SB/.claude/memory/.dk.lock"
 
+t "10b. isMeta turns are not the user: skill body, image paste, harness filler"
+sandbox; run_capture "$FIX/transcript_meta.jsonl" DK_SCAN_LINES=0
+if [ "$(lines "$RAW")" = "1" ] \
+   && grep -qF "you didn't run the tests" "$RAW" \
+   && ! grep -q "Base directory for this skill" "$RAW" \
+   && ! grep -q "\[Image:" "$RAW" \
+   && ! grep -q "Continue from where you left off" "$RAW"; then ok; else bad "raw: $(cat "$RAW")"; fi
+
 t "11. default 150-line window misses a signal buried deep; SCAN_LINES=0 catches it"
 sandbox; run_capture "$FIX/transcript_deep.jsonl"
 deep_default=$(lines "$RAW")

@@ -1,0 +1,5 @@
+{"type":"user","uuid":"u-m-1","isSidechain":false,"isMeta":true,"message":{"role":"user","content":[{"type":"text","text":"Base directory for this skill: /Users/x/.claude/skills/humanizer\n\n# Humanizer\n\nRule: never use em dashes. Always use plain words. In future, you didn't preserve the claims is the failure to avoid."}]}}
+{"type":"assistant","uuid":"a-m-1","isSidechain":false,"message":{"role":"assistant","content":[{"type":"text","text":"Rewritten the paragraph."}]}}
+{"type":"user","uuid":"u-m-2","isSidechain":false,"isMeta":true,"message":{"role":"user","content":[{"type":"text","text":"[Image: original 3024x1900, displayed at 2000x1257. Multiply coordinates by 1.51 to map to original image.]"}]}}
+{"type":"user","uuid":"u-m-3","isSidechain":false,"isMeta":true,"message":{"role":"user","content":[{"type":"text","text":"Continue from where you left off."}]}}
+{"type":"user","uuid":"u-m-4","isSidechain":false,"message":{"role":"user","content":[{"type":"text","text":"you didn't run the tests before saying it was done"}]}}

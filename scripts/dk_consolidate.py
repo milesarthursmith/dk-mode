@@ -69,6 +69,9 @@ STATE = os.path.join(MEM, ".dk_state")
 LOCK = os.path.join(MEM, ".dk-consolidate.lock")
 
 BACKEND = os.environ.get("DK_BACKEND", "anthropic").strip().lower()
+# Thinking models (qwen3, deepseek-r1) spend the whole token budget on
+# reasoning and return empty content. "none" turns it off on ollama/vLLM.
+REASONING_EFFORT = os.environ.get("DK_REASONING_EFFORT", "").strip()
 DEFAULT_URL = ("http://localhost:11434/v1/chat/completions" if BACKEND == "openai"
                else "https://api.anthropic.com/v1/messages")
 API_URL = os.environ.get("DK_API_URL", DEFAULT_URL)
@@ -82,7 +85,7 @@ MODELS = [m.strip() for m in
           if m.strip()]
 USER_NAME = os.environ.get("DK_USER_NAME", "").strip()
 USER_REF = f"the user ({USER_NAME})" if USER_NAME else "the user"
-BATCH_CAP = 200
+BATCH_CAP = int(os.environ.get("DK_BATCH", "200"))
 NOTE_MAX_LINES = 12
 # Local models on CPU can be slow; give them room without hanging forever.
 LOCAL_TIMEOUT = int(os.environ.get("DK_TIMEOUT", "600" if BACKEND == "openai" else "180"))
@@ -255,13 +258,16 @@ def call_api(key, prompt):
     last_err = None
     for model in MODELS:
         if BACKEND == "openai":
-            body = json.dumps({
+            payload = {
                 "model": model,
                 "max_tokens": 8000,
                 "temperature": 0,
                 "stream": False,
                 "messages": [{"role": "user", "content": prompt}],
-            }).encode("utf-8")
+            }
+            if REASONING_EFFORT:
+                payload["reasoning_effort"] = REASONING_EFFORT
+            body = json.dumps(payload).encode("utf-8")
             headers = {"content-type": "application/json"}
             if key:  # local servers usually need no key; hosted ones do
                 headers["authorization"] = f"Bearer {key}"
@@ -336,6 +342,16 @@ def strip_fences(text):
     return t
 
 
+def trim_echo(text):
+    """Small local models append the CURRENT FILE verbatim after their
+    rewrite. Keep only the first complete document: any later `---` line
+    immediately followed by `name:` starts an echoed copy."""
+    for m in re.finditer(r"(?m)^---[ \t]*\r?\nname:", text):
+        if m.start() > 0:
+            return text[:m.start()].rstrip() + "\n"
+    return text
+
+
 def validate(text):
     """A malformed rewrite must never reach the hot path."""
     if not text.startswith("---"):
@@ -345,6 +361,10 @@ def validate(text):
                    "## Standing Rules", "## Retired"):
         if marker not in text:
             return f"missing {marker}"
+    if text.count("<!-- inject:start -->") != 1:
+        return "duplicated inject block"
+    if len(re.findall(r"(?m)^consolidated_through:", text)) != 1:
+        return "duplicated frontmatter"
     block = text.split("<!-- inject:start -->")[1].split("<!-- inject:end -->")[0]
     n_lines = len([ln for ln in block.splitlines() if ln.strip()])
     if n_lines > NOTE_MAX_LINES:
@@ -387,7 +407,7 @@ def run_batch(key):
     text, model_or_err = call_api(key, prompt)
     if text is None:
         fail(f"API call failed ({model_or_err})")
-    text = strip_fences(text)
+    text = trim_echo(strip_fences(text))
 
     problem = validate(text)
     if problem:
