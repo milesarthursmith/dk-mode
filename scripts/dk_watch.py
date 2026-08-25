@@ -64,6 +64,9 @@ ACTIVE = os.path.join(MEM, ".dk_active")
 LOCK = os.path.join(MEM, ".dk-watch.lock")
 
 BACKEND = os.environ.get("DK_BACKEND", "anthropic").strip().lower()
+# Thinking models (qwen3, deepseek-r1) burn the whole budget on reasoning and
+# return empty content - fatal here, where max_tokens is only 400.
+REASONING_EFFORT = os.environ.get("DK_REASONING_EFFORT", "").strip()
 API_URL = os.environ.get(
     "DK_API_URL",
     "http://localhost:11434/v1/chat/completions" if BACKEND == "openai"
@@ -140,7 +143,10 @@ def transcript_tail(path, n):
             e = json.loads(line)
         except (json.JSONDecodeError, ValueError):
             continue
-        if e.get("isSidechain") or e.get("type") not in ("user", "assistant"):
+        # isMeta = harness-injected user turn (skill body, image-paste metadata,
+        # Stop-hook feedback). Reading it as the user skews the judgement.
+        if (e.get("isSidechain") or e.get("isMeta")
+                or e.get("type") not in ("user", "assistant")):
             continue
         c = (e.get("message") or {}).get("content")
         if isinstance(c, str):
@@ -214,6 +220,8 @@ def call_model(key, prompt):
             body = {"model": model, "max_tokens": 400, "temperature": 0,
                     "stream": False,
                     "messages": [{"role": "user", "content": prompt}]}
+            if REASONING_EFFORT:
+                body["reasoning_effort"] = REASONING_EFFORT
             headers = {"content-type": "application/json"}
             if key:
                 headers["authorization"] = f"Bearer {key}"

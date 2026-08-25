@@ -207,7 +207,10 @@ for e in entries:
             "cwd": e.get("cwd", ""),
         })
         continue
-    if etype != "user" or e.get("isSidechain"):
+    # isMeta marks harness-injected user-role turns: a skill body loaded by a
+    # slash command, image-paste metadata, "Continue from where you left off",
+    # Stop-hook feedback. The role says user; the human did not type it.
+    if etype != "user" or e.get("isSidechain") or e.get("isMeta"):
         continue
     t = text_of(e.get("message"))
     if not t:
