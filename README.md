@@ -75,13 +75,42 @@ string in settings.json to scope them per-project):
 |---|---|---|
 | `ANTHROPIC_API_KEY` | unset | Primary API key source for the consolidator. |
 | `DK_KEY_FILE` | unset | Path to a file containing the key; used if the env var is unset. If neither resolves, consolidation silently skips (capture + recall still work). |
-| `DK_MODELS` | `claude-fable-5,claude-opus-5` | Comma-separated, tried in order. |
+| `DK_BACKEND` | `anthropic` | `anthropic` (hosted) or `openai` for any OpenAI-compatible server — Ollama, LM Studio, llama.cpp, vLLM. See **Running it locally** below. |
+| `DK_MODELS` | `claude-fable-5,claude-opus-5` (hosted) / `qwen2.5:14b-instruct` (local) | Comma-separated, tried in order. |
+| `DK_TIMEOUT` | `180` hosted / `600` local | Seconds per request; local CPU inference is slow. |
 | `DK_USER_NAME` | unset | Your name, used in the consolidation prompt ("the user (Name)"). |
 | `DK_INTERVAL` | `7d` | Consolidation cadence: `Nd`/`Nh`/`Nm`, bare seconds, or `per-turn`/`always`/`0` for every prompt (for cost-insensitive background/autonomous agents). |
 | `DK_APPROVAL` | `0` | Approval ("training wheels") mode. When `1`, new items land as `Status: pending`, are HELD OUT of the injected note (the validator rejects any consolidation that leaks a pending reminder line into it), and each prompt gets a one-line nudge. Review with `/dk-review` (or `scripts/dk_review.py --list/--approve/--reject` — approval rebuilds the note immediately, rejection preserves the item under Retired). Turn off once the consolidator has earned trust. |
 | `DK_LOG_DIR` | `~/Library/Logs` or `~/.claude/logs` | Where consolidation error detail is written (never /tmp). |
 | `DK_SCAN_LINES` | `150` | Transcript lines the capture hook scans; `0` = whole file (what backfill uses). |
 | `DK_API_URL` | api.anthropic.com | Test override (the test suite points it at a local mock). |
+
+## Running it locally
+
+Your corrections are the most personal data in the workspace, and
+consolidation is the only stage that leaves the machine. Point it at a local
+model and nothing does:
+
+```bash
+ollama serve && ollama pull qwen2.5:14b-instruct   # once
+export DK_BACKEND=openai                            # OpenAI-compatible wire format
+export DK_API_URL=http://localhost:11434/v1/chat/completions   # this is the default
+export DK_MODELS=qwen2.5:14b-instruct
+```
+
+No API key is needed in this mode (the hosted path still requires one). Same
+for LM Studio (`http://localhost:1234/v1/chat/completions`), llama.cpp
+`--server`, or vLLM — only the URL and model name change.
+
+Worth knowing: consolidation is a judgment task (is this a repeat? is this a
+false positive? what warning line actually lands?), so a small local model
+will merge less cleverly than a frontier one. The structural validator, the
+"never invent, quote verbatim" rule and the immutable raw log all still
+apply, and approval mode (below) is the real safety net — with `DK_APPROVAL=1`
+nothing a local model proposes steers anything until you approve it. A
+sensible split is local for privacy, hosted for quality; the raw log is
+never modified either way, so you can re-run consolidation on a different
+backend by resetting `consolidated_through`.
 
 ## Files it owns in your project
 
@@ -101,7 +130,7 @@ string in settings.json to scope them per-project):
 ## Tests
 
 ```bash
-bash tests/run_dk_tests.sh          # 49 tests, sandboxed, no key/network
+bash tests/run_dk_tests.sh          # 52 tests, sandboxed, no key/network
 bash tests/run_dk_tests.sh --live   # + one real-API behavioral test
 ```
 

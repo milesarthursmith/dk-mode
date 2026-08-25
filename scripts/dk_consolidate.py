@@ -68,17 +68,24 @@ MEMLOG = os.path.join(MEM, "log.md")
 STATE = os.path.join(MEM, ".dk_state")
 LOCK = os.path.join(MEM, ".dk-consolidate.lock")
 
-API_URL = os.environ.get("DK_API_URL", "https://api.anthropic.com/v1/messages")
+BACKEND = os.environ.get("DK_BACKEND", "anthropic").strip().lower()
+DEFAULT_URL = ("http://localhost:11434/v1/chat/completions" if BACKEND == "openai"
+               else "https://api.anthropic.com/v1/messages")
+API_URL = os.environ.get("DK_API_URL", DEFAULT_URL)
 # Approval ("training wheels") mode: new items land as pending and are held
 # out of the inject note until a human approves them via dk_review.py.
 APPROVAL = os.environ.get("DK_APPROVAL", "0").strip().lower() in ("1", "true", "yes", "on")
+DEFAULT_MODELS = ("qwen2.5:14b-instruct" if BACKEND == "openai"
+                  else "claude-fable-5,claude-opus-5")
 MODELS = [m.strip() for m in
-          os.environ.get("DK_MODELS", "claude-fable-5,claude-opus-5").split(",")
+          os.environ.get("DK_MODELS", DEFAULT_MODELS).split(",")
           if m.strip()]
 USER_NAME = os.environ.get("DK_USER_NAME", "").strip()
 USER_REF = f"the user ({USER_NAME})" if USER_NAME else "the user"
 BATCH_CAP = 200
 NOTE_MAX_LINES = 12
+# Local models on CPU can be slow; give them room without hanging forever.
+LOCAL_TIMEOUT = int(os.environ.get("DK_TIMEOUT", "600" if BACKEND == "openai" else "180"))
 
 TODAY = datetime.date.today().isoformat()
 
@@ -241,24 +248,46 @@ fences.
 
 
 def call_api(key, prompt):
+    """One request per model until one answers. Two wire formats:
+    Anthropic messages (default) and OpenAI-compatible chat/completions,
+    which is what Ollama, LM Studio, llama.cpp and vLLM all serve - so
+    DK_BACKEND=openai + DK_API_URL is how you keep this stage local."""
     last_err = None
     for model in MODELS:
-        body = json.dumps({
-            "model": model,
-            "max_tokens": 8000,
-            "temperature": 0,
-            "messages": [{"role": "user", "content": prompt}],
-        }).encode("utf-8")
-        req = urllib.request.Request(API_URL, data=body, headers={
-            "content-type": "application/json",
-            "x-api-key": key,
-            "anthropic-version": "2023-06-01",
-        })
+        if BACKEND == "openai":
+            body = json.dumps({
+                "model": model,
+                "max_tokens": 8000,
+                "temperature": 0,
+                "stream": False,
+                "messages": [{"role": "user", "content": prompt}],
+            }).encode("utf-8")
+            headers = {"content-type": "application/json"}
+            if key:  # local servers usually need no key; hosted ones do
+                headers["authorization"] = f"Bearer {key}"
+        else:
+            body = json.dumps({
+                "model": model,
+                "max_tokens": 8000,
+                "temperature": 0,
+                "messages": [{"role": "user", "content": prompt}],
+            }).encode("utf-8")
+            headers = {
+                "content-type": "application/json",
+                "x-api-key": key,
+                "anthropic-version": "2023-06-01",
+            }
+        req = urllib.request.Request(API_URL, data=body, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=180) as resp:
+            with urllib.request.urlopen(req, timeout=LOCAL_TIMEOUT) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
-            text = "".join(b.get("text", "") for b in data.get("content", [])
-                           if isinstance(b, dict) and b.get("type") == "text")
+            if BACKEND == "openai":
+                choices = data.get("choices") or []
+                text = (choices[0].get("message", {}).get("content", "")
+                        if choices else "")
+            else:
+                text = "".join(b.get("text", "") for b in data.get("content", [])
+                               if isinstance(b, dict) and b.get("type") == "text")
             if text.strip():
                 return text, model
             last_err = f"{model}: empty response"
@@ -332,8 +361,9 @@ def validate(text):
 
 
 def run_batch(key):
-    """Consolidate one batch. Returns (processed_count, note_items) or
-    raises via fail() on error. Returns (0, 0) when nothing is pending."""
+    """Consolidate one batch. Returns (processed_count, note_items, model)
+    or raises via fail() on error. Returns (0, 0, None) when nothing is
+    pending."""
     with open(RULES, encoding="utf-8") as f:
         current = f.read()
     m = re.search(r"^consolidated_through:\s*(\d+)", current, re.M)
@@ -348,7 +378,7 @@ def run_batch(key):
         raw_lines = []
     pending = raw_lines[done:done + BATCH_CAP]
     if not pending:
-        return 0, 0
+        return 0, 0, None
 
     prompt = PROMPT_TEMPLATE.format(
         user_ref=USER_REF, note_max=NOTE_MAX_LINES, current=current,
@@ -387,7 +417,7 @@ def run_batch(key):
 
     block = text.split("<!-- inject:start -->")[1].split("<!-- inject:end -->")[0]
     note_items = len([ln for ln in block.splitlines() if ln.strip().startswith("- ")])
-    return len(pending), note_items
+    return len(pending), note_items, model_or_err
 
 
 def main():
@@ -395,7 +425,9 @@ def main():
     if not os.path.isdir(MEM) or not os.path.isfile(RULES):
         sys.exit(0)
     key = read_key()
-    if not key:
+    # A local OpenAI-compatible server (Ollama/LM Studio/llama.cpp) needs no
+    # key; only the hosted path requires one.
+    if not key and BACKEND != "openai":
         sys.exit(0)  # no key resolvable: silent no-op
     if not take_lock():
         sys.exit(0)
@@ -420,8 +452,9 @@ def main():
         total_processed = 0
         note_items = 0
         batches = 0
+        used_model = None
         while True:
-            processed, items = run_batch(key)
+            processed, items, used_model = run_batch(key)
             if processed == 0:
                 break
             total_processed += processed
@@ -432,8 +465,8 @@ def main():
         if total_processed:
             write_state("success")
             heartbeat(f"processed {total_processed} entries"
-                      f"{f' in {batches} batches' if batches > 1 else ''}; "
-                      f"{note_items} items in note")
+                      f"{f' in {batches} batches' if batches > 1 else ''} "
+                      f"via {used_model}; {note_items} items in note")
     finally:
         try:
             os.rmdir(LOCK)

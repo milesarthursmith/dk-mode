@@ -475,6 +475,49 @@ env HOME="$SB/home" DK_REPO_URL="/nonexistent/nowhere.git" \
 if [ -f "$SB/.claude/skills/dk-review/SKILL.md" ]; then ok; else bad "skill missing"; fi
 
 # =============================================================================
+echo "== local backend (DK_BACKEND=openai) =="
+
+start_openai_mock() {  # start_openai_mock <md-fixture> [delay]
+  local portf="$TMPBASE/oport.$RANDOM"
+  python3 "$TESTS/mock_openai_api.py" "$FIX/$1" "$portf" "${2:-0}" &
+  MOCK_PID=$!
+  for _ in $(seq 1 50); do [ -s "$portf" ] && break; sleep 0.1; done
+  MOCK_PORT="$(cat "$portf")"
+}
+
+t "50. consolidates against a local OpenAI-compatible server with NO api key"
+consolidate_sandbox; rm -f "$KEYF"; raw_sum=$(checksum "$RAW")
+start_openai_mock rewritten_rules_good.md
+env CLAUDE_PROJECT_DIR="$SB" HOME="$SB/home" ANTHROPIC_API_KEY="" DK_KEY_FILE="$KEYF" \
+  DK_BACKEND=openai DK_MODELS="qwen2.5:14b-instruct" \
+  DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/chat/completions" \
+  python3 "$SCRIPTS/dk_consolidate.py"
+stop_mock
+if grep -q "^consolidated_through: 4" "$RULES" \
+   && grep -q "| dk-consolidate | processed 4 entries" "$MEMLOG" \
+   && grep -q "qwen2.5:14b-instruct" "$MEMLOG" \
+   && [ "$(checksum "$RAW")" = "$raw_sum" ]; then ok; else bad "log: $(cat "$MEMLOG")"; fi
+
+t "51. local backend output goes through the same validator (garbage rejected)"
+consolidate_sandbox; rm -f "$KEYF"; rules_sum=$(checksum "$RULES")
+start_openai_mock rewritten_rules_garbage.md
+env CLAUDE_PROJECT_DIR="$SB" HOME="$SB/home" ANTHROPIC_API_KEY="" DK_KEY_FILE="$KEYF" \
+  DK_BACKEND=openai DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/chat/completions" \
+  python3 "$SCRIPTS/dk_consolidate.py"
+stop_mock
+if grep -q "| dk-consolidate | FAILED" "$MEMLOG" \
+   && [ "$(checksum "$RULES")" = "$rules_sum" ]; then ok; else bad "log: $(cat "$MEMLOG")"; fi
+
+t "52. recall kicks with no key when the backend is local, still skips when hosted+keyless"
+kick_sandbox; rm -f "$KEYF"
+kick_recall DK_BACKEND=openai >/dev/null
+local_kicked=$(wait_kicked && echo yes || echo no)
+kick_sandbox; rm -f "$KEYF"
+kick_recall >/dev/null; sleep 0.5
+hosted_kicked=$([ -f "$SB/kicked" ] && echo yes || echo no)
+if [ "$local_kicked" = "yes" ] && [ "$hosted_kicked" = "no" ]; then ok; else bad "local=$local_kicked hosted=$hosted_kicked"; fi
+
+# =============================================================================
 # Live test: real key, real endpoint, real model judgment. Opt-in.
 if [ "${1:-}" = "--live" ]; then
   echo "== live (real API) =="

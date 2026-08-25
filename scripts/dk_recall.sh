@@ -102,6 +102,9 @@ interval_seconds() {
 }
 
 key_available() {
+  # A local OpenAI-compatible backend (Ollama/LM Studio/llama.cpp) needs no
+  # key, so the kick is gated on the backend instead.
+  [ "${DK_BACKEND:-anthropic}" = "openai" ] && return 0
   [ -n "${ANTHROPIC_API_KEY:-}" ] && return 0
   [ -n "${DK_KEY_FILE:-}" ] && [ -f "$DK_KEY_FILE" ] && return 0
   return 1
