@@ -24,9 +24,18 @@ decides what gets recalled:
    - anything else — a verifier, test gate, review agent or CI pushing an
      event through `dk_signal.py` (below).
 
-   Deliberately no LLM here: the steering text is the ground truth, and
-   asking the model to summarise its own mistake is asking the least
-   reliable narrator in the room.
+   The phrase list is only the floor. Measured over a real 46-message
+   session it caught **zero** of the user's actual corrections — people
+   steer by redirecting ("bit lame", "simplify", "that's not the point"),
+   not by saying "you didn't". So the relevance layer's per-turn call does
+   double duty and **reads** each turn for steering the phrases cannot see
+   (14 found across 25 substantive turns on that same session). It returns
+   message ids; the script copies the text verbatim, so it reports where the
+   steering was, never what was said.
+
+   Tuned for recall on purpose: false positives are filtered downstream by
+   the consolidator, the approval gate and the repetition threshold, but a
+   missed correction is invisible forever.
 2. **Consolidate** (background, cadence configurable down to per-turn) — a
    strong model sorts new entries into Mistake Patterns / Standing Rules /
    Facts, merges repeats, discards false positives, and rewrites a small
@@ -198,7 +207,7 @@ backend by resetting `consolidated_through`.
 ## Tests
 
 ```bash
-bash tests/run_dk_tests.sh          # 70 tests, sandboxed, no key/network
+bash tests/run_dk_tests.sh          # 76 tests, sandboxed, no key/network
 bash tests/run_dk_tests.sh --live   # + one real-API behavioral test
 ```
 

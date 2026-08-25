@@ -686,6 +686,68 @@ if [ "$captured" = "1" ] \
    && printf '%s' "$out" | grep -q "never say a check passed"; then ok; else bad "out: $out"; fi
 
 # =============================================================================
+echo "== semantic capture (what the phrase list cannot see) =="
+
+t "71. harness pseudo-user messages are never captured as the user's words"
+sandbox
+cat > "$TMPBASE/noise.jsonl" <<'NOISE'
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"<task-notification>agent finished: try again failed, you didn't handle it</task-notification>"}]},"uuid":"n-1","isSidechain":false}
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"<system-reminder>from now on always check this</system-reminder>"}]},"uuid":"n-2","isSidechain":false}
+NOISE
+run_capture "$TMPBASE/noise.jsonl" DK_WATCH=0
+if [ ! -s "$RAW" ]; then ok; else bad "captured noise: $(cat "$RAW")"; fi
+
+t "72. REAL corrections from a live transcript that the phrase list misses entirely"
+sandbox
+run_capture "$FIX/transcript_real_missed.jsonl" DK_WATCH=0 DK_SCAN_LINES=0
+missed=$(lines "$RAW")
+if [ "$missed" = "0" ]; then ok; else bad "phrase list unexpectedly matched $missed"; fi
+
+t "73. the watcher reads those same messages and captures them verbatim"
+sandbox; echo k > "$KEYF"
+# the model returns ids only; the script copies the text from the transcript
+ids=$(python3 -c "
+import json
+ids=[json.loads(l)['uuid'] for l in open('$FIX/transcript_real_missed.jsonl')]
+print(json.dumps({'active':[], 'alert':None,
+  'steering':[{'id':i,'kind':'correction'} for i in ids[:3]]}))")
+start_watch_mock "$ids"
+runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" DK_WATCH_TURNS=20 \
+  python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_real_missed.jsonl"
+stop_mock
+if [ "$(lines "$RAW")" = "3" ] \
+   && grep -q '"signal": "semantic"' "$RAW" \
+   && grep -qF "shit way to test" "$RAW" \
+   && grep -q "| dk-capture | 3 semantic entries (read, not matched)" "$MEMLOG"; then ok; else bad "raw: $(cat "$RAW")"; fi
+
+t "74. semantic capture cannot invent text - unknown ids are dropped"
+sandbox; echo k > "$KEYF"
+start_watch_mock '{"active":[],"alert":null,"steering":[{"id":"does-not-exist","kind":"correction"},{"id":"also-fake","kind":"instruction"}]}'
+runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_real_missed.jsonl"
+stop_mock
+if [ ! -s "$RAW" ]; then ok; else bad "invented: $(cat "$RAW")"; fi
+
+t "75. semantic capture dedupes against what the phrase list already logged"
+sandbox; echo k > "$KEYF"
+run_capture "$FIX/transcript_correction.jsonl" DK_WATCH=0
+before=$(lines "$RAW")
+uid=$(python3 -c "import json;print([json.loads(l)['uuid'] for l in open('$RAW')][0])")
+start_watch_mock "{\"active\":[],\"alert\":null,\"steering\":[{\"id\":\"$uid\",\"kind\":\"correction\"}]}"
+runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_correction.jsonl"
+stop_mock
+if [ "$before" = "1" ] && [ "$(lines "$RAW")" = "1" ]; then ok; else bad "before=$before after=$(lines "$RAW")"; fi
+
+t "76. cold start: no rules yet, semantic capture still works (that is how rules begin)"
+sandbox; echo k > "$KEYF"   # template rules file has zero approved items
+start_watch_mock '{"active":[],"alert":null,"steering":[{"id":"u-c-2","kind":"correction"}]}'
+runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_correction.jsonl"
+stop_mock
+if [ "$(lines "$RAW")" = "1" ] && grep -q '"signal": "semantic"' "$RAW"; then ok; else bad "raw: $(cat "$RAW")"; fi
+
+# =============================================================================
 # Live test: real key, real endpoint, real model judgment. Opt-in.
 if [ "${1:-}" = "--live" ]; then
   echo "== live (real API) =="

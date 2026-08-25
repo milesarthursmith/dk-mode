@@ -61,6 +61,63 @@ not choose to look — the text is simply there.
 
 ---
 
+## How issues actually get noticed (and why regex alone fails)
+
+Capture runs in two tiers, because a phrase list and a reading model fail in
+opposite directions.
+
+```mermaid
+flowchart TB
+    T["a turn just ended"] --> RX["<b>tier 1: phrase match</b><br/>dk_capture.sh · ~ms, no LLM<br/>'you didn't', 'from now on', 'I was wrong'"]
+    T --> SEM["<b>tier 2: semantic</b><br/>dk_watch.py · the call it already makes<br/><i>did the user steer here, however worded?</i>"]
+    RX --> RAWL[("dk.jsonl")]
+    SEM -->|"returns message ids"| LOOK["script copies the text<br/>verbatim from the transcript"]
+    LOOK --> RAWL
+    RAWL --> F1["consolidator discards one-offs"]
+    F1 --> F2["approval gate"]
+    F2 --> F3["repetition threshold"]
+    F3 --> RULE["a rule"]
+```
+
+**Measured, not assumed.** Running tier 1 over a real 46-message working
+session: it caught **zero** of the user's actual corrections. The only things
+it matched were trigger words quoted inside subagent notifications — noise
+attributed to the user, now filtered. Running tier 2's prompt over the same
+session: **14 steering moments across 25 substantive turns**, including
+every one tier 1 missed.
+
+The reason is simple once you look at real corrections. People do not
+announce them:
+
+> "Mock api is a shit way to test, it needs to be thorough."
+> "Are we calling it remember? Bit lame."
+> "that's the purpose of the whole thing, not just appending every rule"
+> "ideally it will work on its own chats, I don't want it dependent on human input"
+> "Simplify"
+
+None contain a canonical correction phrase. People steer by **redirecting**.
+
+**So why keep tier 1 at all?** It costs nothing, needs no model, and works
+where tier 2 cannot run (no key, no local server, mid-backfill). It is the
+floor, not the mechanism.
+
+**Tuned for recall, deliberately.** A false positive is cheap — three
+downstream filters remove it, and auto-approval needs repetition before
+anything steers behaviour. A missed correction is invisible forever. So both
+tiers err toward catching too much.
+
+**Tier 2 still cannot invent.** The model returns message **ids**; the script
+copies the text out of the transcript. It reports *where* the steering was,
+never *what was said*.
+
+Known limits: slash-command invocations (`/bro` = "say that again without
+jargon") are real steering, but the message body is the skill's text rather
+than the user's, so they are excluded rather than misattributed. And the
+14/25 figure is one model's judgment on one session, not verified ground
+truth — treat it as the right order of magnitude, not a precision score.
+
+---
+
 ## Why the relevance layer runs one turn behind
 
 An LLM call inside `UserPromptSubmit` would stall **every message you send**

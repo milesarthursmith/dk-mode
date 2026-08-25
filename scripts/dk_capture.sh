@@ -212,8 +212,15 @@ for e in entries:
     t = text_of(e.get("message"))
     if not t:
         continue
-    # Slash commands and local-command echoes are not the user talking to Claude.
-    if "<command-name>" in t or "<local-command-caveat>" in t:
+    # Not the user talking: slash commands, local-command echoes, and
+    # harness-generated pseudo-user messages (subagent completions, system
+    # reminders, wake events). Measured against a real transcript, these
+    # were the ONLY things the phrase list matched - trigger words quoted
+    # inside tool output, attributed to the user.
+    if any(marker in t for marker in (
+            "<command-name>", "<local-command-caveat>", "<local-command-stdout>",
+            "<task-notification>", "<system-reminder>", "<wake reason=",
+            "[SYSTEM NOTIFICATION", "<untrusted_external_data")):
         continue
     uuid = e.get("uuid", "")
     if not uuid or uuid in seen:

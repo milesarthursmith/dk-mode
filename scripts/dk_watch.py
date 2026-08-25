@@ -127,7 +127,8 @@ def load_rules():
 
 
 def transcript_tail(path, n):
-    """Recent (role, text) pairs - what actually just happened."""
+    """Recent messages with ids - what actually just happened. Ids matter:
+    the model points at a message, it never retypes one."""
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()[-400:]
@@ -149,9 +150,14 @@ def transcript_tail(path, n):
                              if isinstance(b, dict) and b.get("type") == "text")
         else:
             continue
-        if not text.strip() or "<command-name>" in text:
+        if not text.strip() or any(m in text for m in (
+                "<command-name>", "<local-command-caveat>", "<task-notification>",
+                "<system-reminder>", "<wake reason=", "[SYSTEM NOTIFICATION")):
             continue
-        msgs.append((e["type"], text.strip()[:1500]))
+        msgs.append({"uuid": e.get("uuid", ""), "role": e["type"],
+                     "text": text.strip()[:1500],
+                     "cwd": e.get("cwd", ""),
+                     "ts": e.get("timestamp", "")})
     return msgs[-n:]
 
 
@@ -175,8 +181,24 @@ If you see the agent actively about to repeat one of these failures, you may \
 add a single short "alert": one blunt present-tense sentence naming what it \
 is about to do wrong. No alert unless it is specific to this conversation.
 
+SECOND JOB - capture. The phrase list that feeds this system only matches \
+blunt corrections ("you didn't run the tests"). Measured against real \
+transcripts it catches almost nothing, because people steer by REDIRECTING, \
+not by announcing a correction. So: look at the [user] messages below and \
+report any where the user steered the agent - rejected an approach, \
+redirected it, expressed dissatisfaction however mildly ("bit lame", "that's \
+overcomplicated", "simplify"), pointed out something missed, or stated a \
+preference or rule for future work. Casual, sarcastic and indirect wording \
+all count. Report the message id and a kind.
+
+Do NOT report: ordinary new requests, questions, approvals, or the user \
+simply moving on to the next task. A question that implies the work is \
+wrong ("why is this so slow?") IS steering; a question seeking information \
+is not.
+
 Reply with ONLY a JSON object, no prose, no code fences:
-{{"active": [ids], "alert": "..." or null}}
+{{"active": [ids], "alert": "..." or null,
+ "steering": [{{"id": "<message id>", "kind": "correction|instruction|preference"}}]}}
 
 === RULES ===
 {rules}
@@ -219,6 +241,69 @@ def call_model(key, prompt):
     return None
 
 
+def write_steering(selection, convo, raw_path, memlog):
+    """Log steering the model spotted. It supplies an ID and a kind; the
+    TEXT is copied verbatim from the transcript, so the model can no more
+    invent what the user said than it can invent a rule."""
+    by_id = {m["uuid"]: m for m in convo if m["role"] == "user"}
+    try:
+        with open(raw_path, encoding="utf-8", errors="replace") as f:
+            seen = f.read()
+    except OSError:
+        seen = ""
+    now = __import__("datetime").datetime.now().astimezone().isoformat(timespec="seconds")
+    new = []
+    for item in selection[:5]:
+        if not isinstance(item, dict):
+            continue
+        uid = str(item.get("id", ""))
+        msg = by_id.get(uid)
+        if not msg or f'"{uid}"' in seen:
+            continue
+        kind = str(item.get("kind", "correction"))[:40]
+        new.append({
+            "ts": msg["ts"] or now,
+            "session": "",
+            "uuid": uid,
+            "source": "human",
+            "kind": kind,
+            "signal": "semantic",      # found by reading, not by phrase match
+            "text": msg["text"][:600],
+            "user_verbatim": msg["text"][:600],
+            "assistant_context": "",
+            "cwd": msg["cwd"],
+        })
+    if not new:
+        return 0
+    lock = os.path.join(MEM, ".dk.lock")     # the capture hook's lock
+    for _ in range(20):
+        try:
+            os.mkdir(lock)
+            break
+        except FileExistsError:
+            time.sleep(0.25)
+        except OSError:
+            return 0
+    else:
+        return 0
+    try:
+        with open(raw_path, "a", encoding="utf-8") as f:
+            for e in new:
+                f.write(json.dumps(e, ensure_ascii=False) + "\n")
+        with open(memlog, "a", encoding="utf-8") as f:
+            f.write(f'{__import__("datetime").date.today().isoformat()} '
+                    f'| dk-capture | {len(new)} semantic '
+                    f'{"entry" if len(new) == 1 else "entries"} (read, not matched)\n')
+    except OSError:
+        pass
+    finally:
+        try:
+            os.rmdir(lock)
+        except OSError:
+            pass
+    return len(new)
+
+
 def parse_selection(text, rules):
     """Strictly: ids that exist, an alert that is one short line."""
     m = re.search(r"\{.*\}", text, re.S)
@@ -233,7 +318,10 @@ def parse_selection(text, rules):
     alert = data.get("alert")
     if not isinstance(alert, str) or not alert.strip() or len(alert) > 200:
         alert = None
-    return active[:MAX_ACTIVE], alert
+    steering = data.get("steering")
+    if not isinstance(steering, list):
+        steering = []
+    return active[:MAX_ACTIVE], alert, steering
 
 
 def render(active_ids, alert, rules):
@@ -276,23 +364,30 @@ def main():
         except OSError:
             return 0
     try:
+        # No rules yet (fresh install) is NOT a reason to bail: the second
+        # job - noticing steering the phrase list misses - is exactly how the
+        # rules file gets its first entries. Only relevance needs rules.
         rules = load_rules()
-        if not rules:
-            return 0
         convo = transcript_tail(transcript, TURNS)
         if not convo:
             return 0
         text = call_model(key, PROMPT.format(
             max_active=MAX_ACTIVE,
-            rules="\n".join(f'{r["id"]}. {r["heading"]} - {r["looks_like"]}'
-                            for r in rules),
-            convo="\n\n".join(f"[{role}] {t}" for role, t in convo)))
+            rules=("\n".join(f'{r["id"]}. {r["heading"]} - {r["looks_like"]}'
+                             for r in rules) or "(none yet - skip the first job)"),
+            convo="\n\n".join(
+                f'[{m["role"]} id={m["uuid"]}] {m["text"]}' for m in convo)))
         if not text:
             return 0
         parsed = parse_selection(text, rules)
         if parsed is None:
             return 0                   # malformed: leave the old file to expire
-        atomic_write(ACTIVE, render(parsed[0], parsed[1], rules))
+        if rules:
+            atomic_write(ACTIVE, render(parsed[0], parsed[1], rules))
+        if parsed[2]:
+            write_steering(parsed[2], convo,
+                           os.path.join(MEM, "dk.jsonl"),
+                           os.path.join(MEM, "log.md"))
         return 0
     finally:
         try:
