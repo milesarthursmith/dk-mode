@@ -1,0 +1,3 @@
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "Done, everything works."}]}, "uuid": "a-x-1", "isSidechain": false}
+{"type":"user","message":{"role":"user","content":[{"ty
+{"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "nope, that's not what I asked for. read it properly"}]}, "uuid": "u-x-2", "isSidechain": false, "cwd": "/Users/miles.smith/workspace"}

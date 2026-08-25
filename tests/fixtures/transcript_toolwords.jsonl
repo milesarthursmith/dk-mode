@@ -1,0 +1,5 @@
+{"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "stderr: you didn't run the tests; still broken"}]}, "uuid": "u-t-1", "isSidechain": false}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "The log says 'you didn't run the tests' - from now on always check."}]}, "uuid": "a-t-1", "isSidechain": false}
+{"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "why did you pick that approach? just curious"}]}, "uuid": "u-t-2", "isSidechain": true, "cwd": "/Users/miles.smith/workspace"}
+{"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "<local-command-caveat>ran /model</local-command-caveat> from now on always"}]}, "uuid": "u-t-3", "isSidechain": false, "cwd": "/Users/miles.smith/workspace"}
+{"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "all good, carry on"}]}, "uuid": "u-t-4", "isSidechain": false, "cwd": "/Users/miles.smith/workspace"}

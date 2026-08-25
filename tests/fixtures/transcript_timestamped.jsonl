@@ -1,0 +1,2 @@
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "Report finished."}]}, "uuid": "a-t-0", "isSidechain": false}
+{"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "I prefer the summary at the top, not buried at the end"}]}, "uuid": "u-ts-1", "isSidechain": false, "cwd": "/w", "timestamp": "2026-05-15T14:30:00+10:00"}
