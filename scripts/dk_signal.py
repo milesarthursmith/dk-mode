@@ -13,7 +13,7 @@ Anything that tells an agent it got something wrong is a steering event:
 
 Use it from a hook, a CI step, a skill, or another agent:
 
-  dk_signal.py --kind verdict --source court \\
+  dk_signal.py --kind verdict --source my-verifier \\
       --text "FIX: heading promises a calculator the page does not contain" \\
       --context "shipped page /heating-costs with an empty section"
 
@@ -56,7 +56,7 @@ def main():
     ap.add_argument("--kind", default="verdict",
                     help="verdict | test-failure | review | gate (free-form)")
     ap.add_argument("--source", default="verifier",
-                    help="who steered: court, ci, code-review, <agent name>...")
+                    help="who steered: ci, code-review, <verifier or agent name>...")
     ap.add_argument("--context", default="",
                     help="what the agent had just done")
     ap.add_argument("--target", default="",

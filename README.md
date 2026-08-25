@@ -58,6 +58,8 @@ decides what gets recalled:
    `dk_backfill.sh` sweeps them all through the exact same capture logic,
    so memory is seeded from real history instead of starting empty.
 
+**[How it works, with diagrams →](docs/MECHANISM.md)**
+
 Everything in the distilled file must trace to something you actually said,
 quoted verbatim with a date. Prior art: Reflexion (post-hoc self-critique
 prepended to later attempts), prospective reflection (plan checked against
@@ -85,13 +87,13 @@ doesn't remove the veto.
 something wrong is a steering event, and can report itself:
 
 ```bash
-dk_signal.py --kind verdict --source court \
+dk_signal.py --kind verdict --source my-verifier \
   --text "FIX: heading promises a calculator the page does not contain" \
   --context "shipped /heating-costs"
 ```
 
 Wire it into a verifier, a ship gate, a failing-test handler, a review
-subagent. Those entries flow through the same consolidation as your own
+subagent — anything you already run that catches the agent being wrong. Those entries flow through the same consolidation as your own
 corrections, so a gate's repeated complaint becomes a standing rule exactly
 like your repeated correction does. It exits 0 even when dk-mode isn't
 installed — a telemetry call must never fail the pipeline reporting it.
