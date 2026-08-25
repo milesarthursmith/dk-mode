@@ -29,7 +29,8 @@ decides what gets recalled:
    steer by redirecting ("bit lame", "simplify", "that's not the point"),
    not by saying "you didn't". So the relevance layer's per-turn call does
    double duty and **reads** each turn for steering the phrases cannot see
-   (14 found across 25 substantive turns on that same session). It returns
+   (a model given the same criteria — though not the production prompt path —
+   found 14 across 25 substantive turns of that session). It returns
    message ids; the script copies the text verbatim, so it reports where the
    steering was, never what was said.
 
@@ -158,6 +159,8 @@ string in settings.json to scope them per-project):
 | `DK_REASONING_EFFORT` | unset | Passed to an OpenAI-compatible server (`none` turns thinking off). Belt to `DK_WATCH_MAX_TOKENS`'s braces for local thinking models. |
 | `DK_BATCH` | `200` | Entries per consolidation batch. Lower it for a small local model. |
 | `DK_ACTIVE_TTL` | `3600` | Seconds a live selection stays valid before recall falls back to the static note. |
+| `DK_SESSION_ID` | unset | Scopes the live selection to one conversation. Claude Code supplies it via the hook payload; set it only when driving the scripts by hand. |
+| `DK_BACKFILL_SEMANTIC` | `1` | Read history as well as phrase-match it during backfill. Setting `0` makes mining history nearly useless — it is there for debugging, not for saving money. |
 | `DK_INTERVAL` | `7d` | Consolidation cadence: `Nd`/`Nh`/`Nm`, bare seconds, or `per-turn`/`always`/`0` for every prompt (for cost-insensitive background/autonomous agents). |
 | `DK_APPROVAL` | `0` | `0` off, `1` a human approves everything, `auto` repetition approves it (see **Running with nobody watching**). When on, new items land as `Status: pending`, are HELD OUT of the injected note (the validator rejects any consolidation that leaks a pending reminder line into it), and each prompt gets a one-line nudge. Review with `/dk-review` (or `scripts/dk_review.py --list/--approve/--reject` — approval rebuilds the note immediately, rejection preserves the item under Retired). Turn off once the consolidator has earned trust. |
 | `DK_AUTO_APPROVE_COUNT` | `3` | Occurrences before `DK_APPROVAL=auto` promotes a pending item. |
@@ -212,8 +215,8 @@ backend by resetting `consolidated_through`.
 ## Tests
 
 ```bash
-bash tests/run_dk_tests.sh          # 76 tests, sandboxed, no key/network
-bash tests/run_dk_tests.sh --live   # + one real-API behavioral test
+bash tests/run_dk_tests.sh          # sandboxed, no key or network needed
+bash tests/run_dk_tests.sh --live   # + one real-API behavioural test
 ```
 
 The main suite fakes the API with a local server so failure modes the real

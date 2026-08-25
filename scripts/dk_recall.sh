@@ -54,6 +54,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # prints filesystem info; on macOS `-c` errors and `-f %m` runs.
 mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; }
 
+# The hook payload carries session_id; without reading it the selection
+# cannot be scoped to this conversation.
+PAYLOAD="$(cat 2>/dev/null || true)"
+
 # 1. What to inject. Two tiers:
 #    a) the LIVE selection written by dk_watch.py after the previous turn -
 #       only the rules the relevance layer judged applicable to what is
@@ -64,7 +68,11 @@ mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; 
 #    noise by turn 40; a rule injected at the moment it applies is a
 #    challenge. Both paths are file reads - never an LLM call in the hot
 #    path.
-ACTIVE="$MEM/.dk_active"
+# The selection is per-session: an unscoped file meant a sibling chat's
+# verdict got injected here as "relevant to what you are doing right now".
+SESSION="$(printf '%s' "$PAYLOAD" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:[[:space:]]*"//; s/"$//' || true)"
+SESSION="${SESSION:0:16}"; [ -n "$SESSION" ] || SESSION=nosession
+ACTIVE="$MEM/.dk_active.$SESSION"
 TTL="${DK_ACTIVE_TTL:-3600}"
 injected=no
 if [ -r "$ACTIVE" ]; then
@@ -104,6 +112,13 @@ if [ -r "$RULES" ]; then
   fi
 fi
 
+# 3a. Broken-not-quiet for the RELEVANCE layer. It used to fail in total
+#     silence, which looks identical to "nothing was relevant".
+wcf=$(state_get watch_consecutive_failed); [ -n "$wcf" ] || wcf=0
+if [ "$wcf" -ge 3 ] 2>/dev/null; then
+  echo "(dk-mode: the relevance layer has failed its last $wcf runs - it is broken, not quiet. See dk_watch.log under \${DK_LOG_DIR:-~/Library/Logs or ~/.claude/logs})"
+fi
+
 # 3. Broken-not-quiet: 3 consecutive FAILED consolidations (from state file).
 cf=$(state_get consecutive_failed); [ -n "$cf" ] || cf=0
 if [ "$cf" -ge 3 ] 2>/dev/null; then
@@ -116,11 +131,19 @@ fi
 #    failure doesn't stall a long interval). Gated on: unprocessed entries
 #    exist AND a key is resolvable.
 interval_seconds() {
+  # Anything unparseable used to evaluate to 0, which means "always due" -
+  # a typo in DK_INTERVAL silently turned on per-turn consolidation and the
+  # bill that comes with it. Unrecognised input now falls back to the
+  # documented default instead.
   case "$1" in
     ""|0|per-turn|always) echo 0 ;;
+    *[!0-9]*d) echo 604800 ;;
+    *[!0-9]*h) echo 604800 ;;
+    *[!0-9]*m) echo 604800 ;;
     *d) echo $(( ${1%d} * 86400 )) ;;
     *h) echo $(( ${1%h} * 3600 )) ;;
     *m) echo $(( ${1%m} * 60 )) ;;
+    *[!0-9]*) echo 604800 ;;
     *) echo "$1" ;;
   esac
 }

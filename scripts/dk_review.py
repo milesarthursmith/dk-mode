@@ -69,10 +69,14 @@ def parse_pending(text):
 
 def approved_items(text):
     out = []
+    # Anchor on a real section heading at line start. text.find() matched the
+    # string anywhere - including inside a quoted Evidence line - which
+    # silently retired every item after it.
+    rm = re.search(r"^## Retired\s*$", text, re.M)
+    retired_at = rm.start() if rm else -1
     for m in ITEM_RE.finditer(text):
         block = m.group(0)
-        # Retired section items never steer; skip anything after ## Retired.
-        if m.start() > text.find("## Retired") >= 0:
+        if retired_at >= 0 and m.start() > retired_at:
             continue
         status = field(block, "Status") or "approved"  # no Status = approved
         if status.startswith("approved"):

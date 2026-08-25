@@ -60,8 +60,13 @@ def find_root(start):
 ROOT = os.environ.get("CLAUDE_PROJECT_DIR") or find_root(SCRIPT_DIR)
 MEM = os.path.join(ROOT, ".claude", "memory")
 RULES = os.path.join(MEM, "dk_rules.md")
-ACTIVE = os.path.join(MEM, ".dk_active")
+SESSION = (os.environ.get("DK_SESSION_ID", "") or "")[:16] or "nosession"
+# Scoped per session: an unscoped file meant one chat's verdict was injected
+# into another's under the header "relevant to what you are doing right now".
+# Concurrent chats on one repo is the normal case, not an edge case.
+ACTIVE = os.path.join(MEM, f".dk_active.{SESSION}")
 LOCK = os.path.join(MEM, ".dk-watch.lock")
+STATE = os.path.join(MEM, ".dk_state")
 
 BACKEND = os.environ.get("DK_BACKEND", "anthropic").strip().lower()
 # Thinking models (qwen3, deepseek-r1) spend the budget on reasoning and
@@ -71,6 +76,8 @@ BACKEND = os.environ.get("DK_BACKEND", "anthropic").strip().lower()
 # no longer knife-edge. The reply is a few dozen tokens of JSON; 400 was an
 # arbitrary cap that left no room for any preamble at all.
 REASONING_EFFORT = os.environ.get("DK_REASONING_EFFORT", "").strip()
+APPROVAL_ON = os.environ.get("DK_APPROVAL", "0").strip().lower() in (
+    "1", "true", "yes", "on", "auto")
 MAX_TOKENS = int(os.environ.get("DK_WATCH_MAX_TOKENS", "2000"))
 API_URL = os.environ.get(
     "DK_API_URL",
@@ -85,6 +92,48 @@ TIMEOUT = int(os.environ.get("DK_WATCH_TIMEOUT", "120"))
 MAX_ACTIVE = 3
 
 ITEM_RE = re.compile(r"^### .*?(?=^### |^## |\Z)", re.M | re.S)
+
+
+def log(msg):
+    """The watcher used to fail in total silence: nine return-0 paths, no
+    log, no state. A dead watcher looks exactly like a quiet one."""
+    d = os.environ.get("DK_LOG_DIR")
+    if not d:
+        mac = os.path.expanduser("~/Library/Logs")
+        d = mac if os.path.isdir(mac) else os.path.expanduser("~/.claude/logs")
+    try:
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "dk_watch.log"), "a", encoding="utf-8") as f:
+            f.write(f"{__import__('datetime').datetime.now().isoformat(timespec='seconds')} {msg}\n")
+    except OSError:
+        pass
+
+
+def mark(ok, why=""):
+    """Record health in .dk_state so dk_recall.sh can announce a broken
+    watcher, the same way it announces a broken consolidator."""
+    st = {}
+    try:
+        with open(STATE, encoding="utf-8") as f:
+            st = dict(l.rstrip("\n").split("=", 1) for l in f if "=" in l)
+    except OSError:
+        pass
+    now = str(int(time.time()))
+    st["watch_last_attempt_epoch"] = now
+    if ok:
+        st["watch_last_ok_epoch"] = now
+        st["watch_consecutive_failed"] = "0"
+    else:
+        st["watch_consecutive_failed"] = str(
+            int(st.get("watch_consecutive_failed", "0") or 0) + 1)
+        log(f"FAILED: {why}")
+    try:
+        fd, tmp = tempfile.mkstemp(dir=MEM, prefix=".dk-state-", suffix=".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write("".join(f"{k}={v}\n" for k, v in st.items()))
+        os.replace(tmp, STATE)
+    except OSError:
+        pass
 
 
 def read_key():
@@ -113,13 +162,19 @@ def load_rules():
             text = f.read()
     except OSError:
         return []
-    retired_at = text.find("## Retired")
+    rm = re.search(r"^## Retired\s*$", text, re.M)   # heading, not substring
+    retired_at = rm.start() if rm else -1
     out = []
     for m in ITEM_RE.finditer(text):
         if retired_at >= 0 and m.start() > retired_at:
             continue
         block = m.group(0)
-        status = field(block, "Status") or "approved"
+        # Absent Status used to mean "approved", so a malformed or truncated
+        # item silently walked through the approval gate. In approval mode,
+        # absent means NOT approved.
+        status = field(block, "Status")
+        if not status:
+            status = "pending" if APPROVAL_ON else "approved"
         if not status.startswith("approved"):
             continue          # pending items never steer
         reminder = field(block, "Reminder line")
@@ -135,12 +190,22 @@ def load_rules():
     return out
 
 
-def transcript_tail(path, n):
+def transcript_windows(path, n, whole=False):
+    """The recent window, or - for backfill - every window of a whole
+    transcript so history is covered rather than sampled."""
+    msgs = _read_messages(path)
+    if not whole:
+        return msgs[-n:]
+    cap = int(os.environ.get("DK_BACKFILL_WINDOWS", "40"))
+    return [msgs[i:i + n] for i in range(0, len(msgs), n)][:cap] or []
+
+
+def _read_messages(path):
     """Recent messages with ids - what actually just happened. Ids matter:
     the model points at a message, it never retypes one."""
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()[-400:]
+            lines = f.readlines()
     except OSError:
         return []
     msgs = []
@@ -170,7 +235,7 @@ def transcript_tail(path, n):
                      "text": text.strip()[:1500],
                      "cwd": e.get("cwd", ""),
                      "ts": e.get("timestamp", "")})
-    return msgs[-n:]
+    return msgs
 
 
 PROMPT = """You are the relevance layer of a self-steering system for a \
@@ -305,10 +370,18 @@ def write_steering(selection, convo, raw_path, memlog):
             os.mkdir(lock)
             break
         except FileExistsError:
+            try:      # every other writer reclaims a stale lock; this didn't,
+                      # so one orphaned lock silently dropped every entry
+                if time.time() - os.stat(lock).st_mtime > 30:
+                    os.rmdir(lock)
+                    continue
+            except OSError:
+                pass
             time.sleep(0.25)
         except OSError:
             return 0
     else:
+        log("gave up on .dk.lock - entries dropped")
         return 0
     try:
         with open(raw_path, "a", encoding="utf-8") as f:
@@ -384,9 +457,16 @@ def atomic_write(path, text):
 
 
 def main():
-    if os.environ.get("DK_WATCH", "1").strip().lower() in ("0", "false", "no", "off"):
+    # --capture-only: mine a historical transcript for steering the phrase
+    # list cannot see, without writing a live selection. Backfill used to run
+    # phrase-matching alone, which measured 0 real corrections found in a
+    # 46-message session - so mining history produced almost nothing.
+    argv = [a for a in sys.argv[1:] if a != "--capture-only"]
+    capture_only = "--capture-only" in sys.argv
+    if not capture_only and os.environ.get(
+            "DK_WATCH", "1").strip().lower() in ("0", "false", "no", "off"):
         return 0
-    transcript = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("DK_TRANSCRIPT", "")
+    transcript = argv[0] if argv else os.environ.get("DK_TRANSCRIPT", "")
     if not transcript or not os.path.isfile(transcript) or not os.path.isdir(MEM):
         return 0
     key = read_key()
@@ -406,9 +486,29 @@ def main():
         # No rules yet (fresh install) is NOT a reason to bail: the second
         # job - noticing steering the phrase list misses - is exactly how the
         # rules file gets its first entries. Only relevance needs rules.
-        rules = load_rules()
-        convo = transcript_tail(transcript, TURNS)
-        if not convo:
+        rules = [] if capture_only else load_rules()
+        # History is mined in windows so a long session is fully covered,
+        # not just its last few turns.
+        windows = ([transcript_windows(transcript, TURNS)] if not capture_only
+                   else transcript_windows(transcript, TURNS, whole=True))
+        convo = windows[0] if not capture_only else None
+        if not capture_only and not convo:
+            return 0
+        if capture_only:
+            total = 0
+            for w in windows:
+                text = call_model(key, PROMPT.format(
+                    max_active=MAX_ACTIVE, rules="(none - capture only)",
+                    convo="\n\n".join(
+                        f'[{m["role"]} id={m["uuid"]}] {m["text"]}' for m in w)))
+                if not text:
+                    continue
+                parsed = parse_selection(text, [])
+                if parsed and parsed[2]:
+                    total += write_steering(parsed[2], w,
+                                            os.path.join(MEM, "dk.jsonl"),
+                                            os.path.join(MEM, "log.md"))
+            print(f"semantic: {total} entries from {len(windows)} windows")
             return 0
         text = call_model(key, PROMPT.format(
             max_active=MAX_ACTIVE,
@@ -417,16 +517,20 @@ def main():
             convo="\n\n".join(
                 f'[{m["role"]} id={m["uuid"]}] {m["text"]}' for m in convo)))
         if not text:
+            mark(False, "no usable content from any model "
+                        f"({','.join(WATCH_MODELS)} at {API_URL}) - a thinking "
+                        "model with too small a token budget returns empty")
             return 0
         parsed = parse_selection(text, rules)
         if parsed is None:
+            mark(False, f"unparseable response: {text[:200]!r}")
             return 0                   # malformed: leave the old file to expire
         if rules:
             atomic_write(ACTIVE, render(parsed[0], parsed[1], rules))
-        if parsed[2]:
-            write_steering(parsed[2], convo,
-                           os.path.join(MEM, "dk.jsonl"),
-                           os.path.join(MEM, "log.md"))
+        n = write_steering(parsed[2], convo, os.path.join(MEM, "dk.jsonl"),
+                           os.path.join(MEM, "log.md")) if parsed[2] else 0
+        mark(True)
+        log(f"ok: {len(parsed[0])} live, {n} captured, session={SESSION}")
         return 0
     finally:
         try:

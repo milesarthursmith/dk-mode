@@ -44,6 +44,7 @@ sandbox() {
   RULES="$SB/.claude/memory/dk_rules.md"
   MEMLOG="$SB/.claude/memory/log.md"
   STATE="$SB/.claude/memory/.dk_state"
+  ACTIVEF="$SB/.claude/memory/.dk_active.nosession"   # scoped per session
   KEYF="$SB/home/key"
 }
 
@@ -79,6 +80,14 @@ start_mock() {  # start_mock <md-fixture> [delay-seconds]
 stop_mock() {
   [ -n "$MOCK_PID" ] && kill "$MOCK_PID" 2>/dev/null && wait "$MOCK_PID" 2>/dev/null
   MOCK_PID=""
+}
+
+start_watch_mock() {  # start_watch_mock '<json the model returns>'
+  local portf="$TMPBASE/wport.$RANDOM"
+  python3 "$TESTS/mock_watch_api.py" "$1" "$portf" &
+  MOCK_PID=$!
+  for _ in $(seq 1 50); do [ -s "$portf" ] && break; sleep 0.1; done
+  MOCK_PORT="$(cat "$portf")"
 }
 
 checksum() { python3 -c 'import hashlib,sys;print(hashlib.md5(open(sys.argv[1],"rb").read()).hexdigest())' "$1"; }
@@ -374,6 +383,28 @@ if [ "$n1" = "3" ] && [ "$n2" = "3" ] \
    && grep -qF "you skipped the config step" "$RAW" \
    && printf '%s' "$out" | grep -q "scanned 3 transcripts"; then ok; else bad "n1=$n1 n2=$n2 out: $out"; fi
 
+t "38b. backfill mines history by READING it, not just phrase-matching"
+sandbox; echo k > "$KEYF"
+PROJ="$SB/home/.claude/projects/p"; mkdir -p "$PROJ"
+cp "$FIX/transcript_real_missed.jsonl" "$PROJ/s1.jsonl"     # zero phrase matches
+ids=$(python3 -c "
+import json
+ids=[json.loads(l)['uuid'] for l in open('$FIX/transcript_real_missed.jsonl')]
+print(json.dumps({'active':[],'alert':None,'steering':[{'id':i,'kind':'correction'} for i in ids[:2]]}))")
+start_watch_mock "$ids"
+out=$(runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  bash "$SCRIPTS/dk_backfill.sh" --transcripts "$PROJ" --target "$SB")
+stop_mock
+if [ "$(lines "$RAW")" -ge 2 ] && grep -q '"signal": "semantic"' "$RAW" \
+   && printf '%s' "$out" | grep -q "found by reading"; then ok; else bad "out: $out raw=$(lines "$RAW")"; fi
+
+t "38c. backfill warns loudly when the semantic pass yields nothing"
+sandbox
+PROJ="$SB/home/.claude/projects/p"; mkdir -p "$PROJ"
+cp "$FIX/transcript_real_missed.jsonl" "$PROJ/s1.jsonl"
+out=$(runenv DK_BACKFILL_SEMANTIC=0 bash "$SCRIPTS/dk_backfill.sh" --transcripts "$PROJ" --target "$SB")
+if printf '%s' "$out" | grep -q "semantic pass DISABLED"; then ok; else bad "out: $out"; fi
+
 t "39. backfill refuses a target with no .claude/memory"
 sandbox
 if ! runenv bash "$SCRIPTS/dk_backfill.sh" --transcripts "$SB" --target "$SB/home" 2>/dev/null; then ok; else bad "should have failed"; fi
@@ -528,14 +559,6 @@ if [ "$local_kicked" = "yes" ] && [ "$hosted_kicked" = "no" ]; then ok; else bad
 # =============================================================================
 echo "== relevance layer (dk_watch) =="
 
-start_watch_mock() {  # start_watch_mock '<json the model returns>'
-  local portf="$TMPBASE/wport.$RANDOM"
-  python3 "$TESTS/mock_watch_api.py" "$1" "$portf" &
-  MOCK_PID=$!
-  for _ in $(seq 1 50); do [ -s "$portf" ] && break; sleep 0.1; done
-  MOCK_PORT="$(cat "$portf")"
-}
-
 run_watch() {  # run_watch <transcript> [extra env...]
   local tp="$1"; shift
   runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" "$@" \
@@ -549,11 +572,11 @@ watch_sandbox
 start_watch_mock '{"active":[1],"alert":null}'
 run_watch "$FIX/transcript_doneclaim.jsonl"; stop_mock
 # id 1 = first approved item in the fixture = "Claiming done without verifying"
-if grep -q "never say a check passed unless you ran it this turn" "$SB/.claude/memory/.dk_active" \
-   && grep -q "Relevant to what you are doing right now" "$SB/.claude/memory/.dk_active"; then ok; else bad "active: $(cat "$SB/.claude/memory/.dk_active" 2>/dev/null)"; fi
+if grep -q "never say a check passed unless you ran it this turn" "$ACTIVEF" \
+   && grep -q "Relevant to what you are doing right now" "$ACTIVEF"; then ok; else bad "active: $(cat "$ACTIVEF" 2>/dev/null)"; fi
 
 t "53b. a live item is rendered as an episode: what it looks like, what to do, what earned it"
-a="$SB/.claude/memory/.dk_active"
+a="$ACTIVEF"
 if grep -q "what it looks like:" "$a" && grep -q "so: " "$a" && grep -q "earned by:" "$a"; then ok; else bad "$(cat "$a")"; fi
 
 t "54. recall prefers the live selection over the static note"
@@ -561,40 +584,56 @@ out=$(run_recall)
 if printf '%s' "$out" | grep -q "never say a check passed unless you ran it this turn" \
    && ! printf '%s' "$out" | grep -q "Self-steering - check before acting"; then ok; else bad "out: $out"; fi
 
+t "53c. one chat's selection is never injected into another chat's prompt"
+sandbox; cp "$FIX/rules_mixed_approval.md" "$RULES"; echo k > "$KEYF"
+start_watch_mock '{"active":[1],"alert":"sibling chat verdict","steering":[]}'
+runenv DK_SESSION_ID=chat-AAA DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_doneclaim.jsonl"
+stop_mock
+wrote_a=$([ -s "$SB/.claude/memory/.dk_active.chat-AAA" ] && echo yes || echo no)
+# a DIFFERENT chat asks for its prompt
+out=$(printf '{"prompt":"x","session_id":"chat-BBB"}' | runenv bash "$SCRIPTS/dk_recall.sh")
+# and the owning chat still gets it
+out_a=$(printf '{"prompt":"x","session_id":"chat-AAA"}' | runenv bash "$SCRIPTS/dk_recall.sh")
+if [ "$wrote_a" = "yes" ] \
+   && ! printf '%s' "$out" | grep -q "sibling chat verdict" \
+   && printf '%s' "$out" | grep -q "Self-steering - check before acting" \
+   && printf '%s' "$out_a" | grep -q "sibling chat verdict"; then ok; else bad "B saw: $out"; fi
+
 t "55. empty selection = nothing live -> injects NOTHING (not the static note)"
 watch_sandbox
 start_watch_mock '{"active":[],"alert":null}'
 run_watch "$FIX/transcript_doneclaim.jsonl"; stop_mock
 out=$(run_recall)
-if [ ! -s "$SB/.claude/memory/.dk_active" ] \
+if [ ! -s "$ACTIVEF" ] \
    && ! printf '%s' "$out" | grep -q "self-steering"; then ok; else bad "out: $out"; fi
 
 t "56. a situational alert is injected above the rules"
 watch_sandbox
 start_watch_mock '{"active":[1],"alert":"You just said the tests pass without running them this turn."}'
 run_watch "$FIX/transcript_doneclaim.jsonl"; stop_mock
-if head -3 "$SB/.claude/memory/.dk_active" | grep -q "without running them this turn"; then ok; else bad "$(cat "$SB/.claude/memory/.dk_active")"; fi
+if head -3 "$ACTIVEF" | grep -q "without running them this turn"; then ok; else bad "$(cat "$ACTIVEF")"; fi
 
 t "57. pending items can never be selected (ids cover approved only)"
 watch_sandbox
 # fixture has 1 approved + 2 pending; ask for ids 2 and 3 (out of range)
 start_watch_mock '{"active":[2,3],"alert":null}'
 run_watch "$FIX/transcript_doneclaim.jsonl"; stop_mock
-if [ ! -s "$SB/.claude/memory/.dk_active" ]; then ok; else bad "leaked: $(cat "$SB/.claude/memory/.dk_active")"; fi
+if [ ! -s "$ACTIVEF" ]; then ok; else bad "leaked: $(cat "$ACTIVEF")"; fi
 
 t "58. malformed model output -> nothing written, old selection left to expire"
 watch_sandbox; printf 'PREVIOUS
-' > "$SB/.claude/memory/.dk_active"
+' > "$ACTIVEF"
 start_watch_mock 'sure! here are the rules I think apply: probably all of them'
 run_watch "$FIX/transcript_doneclaim.jsonl"; stop_mock
-if [ "$(cat "$SB/.claude/memory/.dk_active")" = "PREVIOUS" ]; then ok; else bad "clobbered"; fi
+if [ "$(cat "$ACTIVEF")" = "PREVIOUS" ]; then ok; else bad "clobbered"; fi
 
 t "59. stale selection is ignored; recall falls back to the static note"
 watch_sandbox; printf '<self-steering>
 STALE
 </self-steering>
-' > "$SB/.claude/memory/.dk_active"
-backdate "$SB/.claude/memory/.dk_active" 1
+' > "$ACTIVEF"
+backdate "$ACTIVEF" 1
 out=$(run_recall)
 if ! printf '%s' "$out" | grep -q "STALE" \
    && printf '%s' "$out" | grep -q "Self-steering - check before acting"; then ok; else bad "out: $out"; fi
@@ -603,14 +642,14 @@ t "60. no key on a hosted backend -> watcher no-ops, static note still injected"
 watch_sandbox; rm -f "$KEYF"
 MOCK_PORT=1 run_watch "$FIX/transcript_doneclaim.jsonl"
 out=$(run_recall)
-if [ ! -e "$SB/.claude/memory/.dk_active" ] \
+if [ ! -e "$ACTIVEF" ] \
    && printf '%s' "$out" | grep -q "Self-steering - check before acting"; then ok; else bad "out: $out"; fi
 
 t "61. DK_WATCH=0 disables the layer entirely"
 watch_sandbox
 start_watch_mock '{"active":[1],"alert":null}'
 run_watch "$FIX/transcript_doneclaim.jsonl" DK_WATCH=0; stop_mock
-if [ ! -e "$SB/.claude/memory/.dk_active" ]; then ok; else bad "ran anyway"; fi
+if [ ! -e "$ACTIVEF" ]; then ok; else bad "ran anyway"; fi
 
 t "62. watcher works against a local OpenAI-compatible server with no key"
 watch_sandbox; rm -f "$KEYF"
@@ -619,7 +658,7 @@ runenv DK_BACKEND=openai \
   DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/chat/completions" \
   python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_doneclaim.jsonl"
 stop_mock
-if grep -q "never say a check passed" "$SB/.claude/memory/.dk_active"; then ok; else bad "active: $(cat "$SB/.claude/memory/.dk_active" 2>/dev/null)"; fi
+if grep -q "never say a check passed" "$ACTIVEF"; then ok; else bad "active: $(cat "$ACTIVEF" 2>/dev/null)"; fi
 
 t "63. capture hook kicks the watcher (and not during backfill)"
 sandbox; cp "$FIX/rules_mixed_approval.md" "$RULES"; echo k > "$KEYF"
@@ -745,12 +784,31 @@ stop_mock
 if grep -q "All 12 tests pass" "$RAW" && grep -q '"signal": "semantic"' "$RAW"; then ok; else bad "no context: $(cat "$RAW")"; fi
 
 t "73b. empty model content (thinking model burning its budget) writes nothing, clobbers nothing"
-sandbox; echo k > "$KEYF"; printf 'PREVIOUS\n' > "$SB/.claude/memory/.dk_active"
+sandbox; echo k > "$KEYF"; printf 'PREVIOUS\n' > "$ACTIVEF"
 start_watch_mock ''
 runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
   python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_correction.jsonl"
 stop_mock
-if [ "$(cat "$SB/.claude/memory/.dk_active")" = "PREVIOUS" ] && [ ! -s "$RAW" ]; then ok; else bad "active=$(cat "$SB/.claude/memory/.dk_active")"; fi
+if [ "$(cat "$ACTIVEF")" = "PREVIOUS" ] && [ ! -s "$RAW" ]; then ok; else bad "active=$(cat "$ACTIVEF")"; fi
+
+t "73c. a failing relevance layer is announced, not silent"
+sandbox; echo k > "$KEYF"
+printf 'watch_consecutive_failed=3\n' > "$STATE"
+out=$(run_recall)
+if printf '%s' "$out" | grep -q "relevance layer has failed its last 3 runs"; then ok; else bad "out: $out"; fi
+
+t "73d. an unparseable DK_INTERVAL falls back to the default, not to per-turn"
+sandbox; echo k > "$KEYF"
+mkdir -p "$SB/stub"; cp "$SCRIPTS/dk_recall.sh" "$SB/stub/dk_recall.sh"
+cat > "$SB/stub/dk_consolidate.py" <<'STUB'
+import os
+open(os.path.join(os.environ["CLAUDE_PROJECT_DIR"], "kicked"), "w").write("1")
+STUB
+echo '{"ts":"x","uuid":"k1"}' >> "$RAW"
+write_state "$(epoch_ago 3600)" success 0      # 1h ago: due at per-turn, not at 7d
+printf '{"prompt":"x"}' | runenv DK_INTERVAL="7dd" bash "$SB/stub/dk_recall.sh" >/dev/null
+sleep 0.5
+if [ ! -f "$SB/kicked" ]; then ok; else bad "junk interval behaved as per-turn"; fi
 
 t "74. semantic capture cannot invent text - unknown ids are dropped"
 sandbox; echo k > "$KEYF"
@@ -805,6 +863,6 @@ if [ "${1:-}" = "--live" ]; then
 fi
 
 echo
-echo "$PASS passed, $FAIL failed"
+echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
 [ "$FAIL" = "0" ] || exit 1
 exit 0

@@ -82,9 +82,11 @@ flowchart TB
 **Measured, not assumed.** Running tier 1 over a real 46-message working
 session: it caught **zero** of the user's actual corrections. The only things
 it matched were trigger words quoted inside subagent notifications — noise
-attributed to the user, now filtered. Running tier 2's prompt over the same
-session: **14 steering moments across 25 substantive turns**, including
-every one tier 1 missed.
+attributed to the user, now filtered. Running tier 2's *criteria* over the same
+session — a model asked to judge each turn, not the production prompt path
+itself: **14 steering moments across 25 substantive turns**, including every
+one tier 1 missed. Treat that as the order of magnitude, not a precision
+score.
 
 The reason is simple once you look at real corrections. People do not
 announce them:
@@ -224,7 +226,8 @@ Nothing here is allowed to block a turn or lose data.
 | Model returns garbage | Rejected by the validator, previous file kept, run marked FAILED |
 | 3 consecutive failures | Every prompt says so — a notification nobody reads is not an alarm |
 | Capture silently dies | 21-day tripwire announces it in-context |
-| Two sessions at once | `mkdir` locks; a loser skips rather than waits |
+| Two sessions at once | `mkdir` locks; a loser skips rather than waits. The live selection is per-session, so one chat's verdict is never injected into another's |
+| Relevance layer broken (bad URL, dead server, empty replies) | 3 consecutive failures announced in-context, details in `dk_watch.log` |
 | Bad consolidation | `dk.jsonl` was never modified — reset `consolidated_through`, re-run |
 
 The raw log being append-only is the backbone: every distilled rule is

@@ -51,6 +51,7 @@ fi
 RAW="$TARGET/.claude/memory/dk.jsonl"
 before=$(wc -l < "$RAW" 2>/dev/null | tr -d ' ' || echo 0)
 scanned=0
+semantic_total=0
 
 # find -print0 handles any filename; sessions are named <uuid>.jsonl.
 while IFS= read -r -d '' t; do
@@ -59,11 +60,26 @@ while IFS= read -r -d '' t; do
   printf '{"transcript_path":"%s","session_id":"%s"}' "$t" "$session" \
     | CLAUDE_PROJECT_DIR="$TARGET" DK_SCAN_LINES=0 \
       bash "$SCRIPT_DIR/dk_capture.sh" || true
+  # Phrase-matching alone measured ZERO real corrections found in a real
+  # 46-message session, so history mined that way is nearly empty. Read it
+  # too, unless explicitly disabled.
+  if [ "${DK_BACKFILL_SEMANTIC:-1}" != "0" ]; then
+    sem=$(CLAUDE_PROJECT_DIR="$TARGET" python3 "$SCRIPT_DIR/dk_watch.py" \
+            --capture-only "$t" 2>/dev/null | sed -n 's/^semantic: \([0-9]*\).*/\1/p')
+    semantic_total=$((semantic_total + ${sem:-0}))
+  fi
 done < <(find "$TRANSCRIPTS" -name '*.jsonl' -type f -print0)
 
 after=$(wc -l < "$RAW" 2>/dev/null | tr -d ' ' || echo 0)
 echo "backfill: scanned $scanned transcripts under $TRANSCRIPTS"
 echo "backfill: $((after - before)) new entries (total $after) in $RAW"
+echo "backfill: $semantic_total of them found by reading, the rest by phrase match"
+if [ "${DK_BACKFILL_SEMANTIC:-1}" = "0" ]; then
+  echo "backfill: semantic pass DISABLED - expect a near-empty yield"
+elif [ "$semantic_total" = "0" ] && [ "$((after - before))" -lt 3 ]; then
+  echo "backfill: WARNING - the semantic pass found nothing. Check a model is"
+  echo "          reachable (DK_BACKEND/DK_API_URL/key), or history really is clean."
+fi
 if [ "$after" -gt "$before" ]; then
   echo "next: python3 $SCRIPT_DIR/dk_consolidate.py --drain   # process the backlog now"
 fi

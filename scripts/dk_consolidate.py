@@ -367,7 +367,13 @@ def trim_echo(text):
     rewrite. Keep only the first complete document: any later `---` line
     immediately followed by `name:` starts an echoed copy."""
     for m in re.finditer(r"(?m)^---[ \t]*\r?\nname:", text):
-        if m.start() > 0:
+        if m.start() == 0:
+            continue
+        # Only treat it as an echoed copy if what follows really is another
+        # whole document - otherwise a quoted "---\nname:" inside an
+        # Evidence line silently truncated the real file.
+        rest = text[m.start():]
+        if "<!-- inject:start -->" in rest and "## Mistake Patterns" in rest:
             return text[:m.start()].rstrip() + "\n"
     return text
 
