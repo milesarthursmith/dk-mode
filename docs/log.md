@@ -152,10 +152,14 @@ Stated plainly because the README does not.
    measured against a real model on real conversations.
 2. **Semantic mining has never run against a real model on real history.**
    Only against local stand-in servers.
-3. **The full hook loop has never been observed end to end.** The injection
-   mechanism was verified indirectly: `additionalContext` was found in a real
-   transcript, which proves the harness injects text by that route. But no
-   `UserPromptSubmit` hook has been registered and watched firing.
+3. **The full hook loop has never been observed end to end.** Partly closed
+   on 2026-08-26: both hooks are now registered in work-backup's committed
+   `.claude/settings.json`, and running each hook's exact command string by
+   hand produces the correct output and exit code. The injection route was
+   also verified indirectly — `additionalContext` appears in a real
+   transcript, which proves the harness injects text that way. What is still
+   unobserved is the harness itself calling the hook mid-conversation and the
+   model reading the result.
 4. **Sonnet via OpenRouter was never compared** against the default models.
 5. **Consolidation stalled at 30 of 117 entries** on an early, noisy log. The
    log needs to be cleared and re-mined with the current filters.
