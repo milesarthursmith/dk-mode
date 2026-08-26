@@ -862,6 +862,70 @@ if [ "${1:-}" = "--live" ]; then
   fi
 fi
 
+# --- 77-80: manual-run ergonomics -------------------------------------------
+# Walking the README as a stranger found these: a manual consolidate ran
+# against dk-mode's OWN checkout instead of the project just mined, and said
+# nothing at all while doing it. Silent no-op is the failure mode this whole
+# project exists to prevent, so both are pinned here.
+
+t "77. --target routes a manual consolidate to the named project, not the script's own tree"
+sandbox
+cp "$FIX/raw_entries.jsonl" "$RAW"
+out=$(cd / && env HOME="$SB/home" ANTHROPIC_API_KEY="" DK_KEY_FILE="$SB/home/nokey" \
+  python3 "$SCRIPTS/dk_consolidate.py" --drain --target "$SB" 2>&1)
+case "$out" in
+  *"project: $SB"*) ok ;;
+  *) bad "did not report the --target project; got: $out" ;;
+esac
+
+t "78. a manual consolidate with no key SAYS so instead of exiting silently"
+out=$(cd / && env HOME="$SB/home" ANTHROPIC_API_KEY="" DK_KEY_FILE="$SB/home/nokey" \
+  python3 "$SCRIPTS/dk_consolidate.py" --drain --target "$SB" 2>&1)
+case "$out" in
+  *"no API key"*) ok ;;
+  *) bad "silent no-op returned; got: [$out]" ;;
+esac
+
+t "79. --target after the item numbers does not get parsed as an item number"
+sandbox
+python3 - "$RULES" <<'PYX'
+import re, sys
+p = sys.argv[1]; t = open(p).read()
+item = ("### Claims done without verifying\n"
+        "**Reminder:** never say a check passed unless you ran it this turn\n"
+        "**Status:** pending\n**Count:** 2\n\n")
+t = re.sub(r"(## Mistake Patterns\s*\n)", r"\1\n" + item, t, count=1)
+open(p, "w").write(t)
+PYX
+out=$(cd / && env HOME="$SB/home" python3 "$SCRIPTS/dk_review.py" \
+  --approve 1 --target "$SB" 2>&1)
+if printf '%s' "$out" | grep -q "^approved:" \
+   && grep -q '\*\*Status:\*\* approved' "$RULES"; then ok
+else bad "approve+target failed; got: $out"; fi
+
+t "80. backfill warns when the reading pass found nothing, even with 3+ phrase hits"
+sandbox
+mkdir -p "$SB/tr"
+python3 - "$SB/tr/a.jsonl" <<'PYX'
+import json, sys
+rows = []
+for i, msg in enumerate(["you didn't run the tests",
+                         "from now on always check MEMORY.md",
+                         "that's not what I asked for"]):
+    rows.append({"type": "user", "uuid": "u%d" % i, "isSidechain": False,
+                 "timestamp": "2026-08-01T00:0%d:00Z" % i,
+                 "message": {"role": "user", "content": msg}})
+open(sys.argv[1], "w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+PYX
+out=$(env HOME="$SB/home" ANTHROPIC_API_KEY="" DK_KEY_FILE="$SB/home/nokey" \
+  bash "$SCRIPTS/dk_backfill.sh" --target "$SB" --transcripts "$SB/tr" 2>&1)
+hits=$(grep -c . "$RAW" 2>/dev/null || echo 0)
+if [ "$hits" -ge 3 ] && printf '%s' "$out" | grep -q "reading pass found NOTHING"; then
+  ok
+else
+  bad "hits=$hits warning missing; got: $out"
+fi
+
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
 [ "$FAIL" = "0" ] || exit 1

@@ -31,7 +31,7 @@ Config: DK_WATCH (0/1, default 1 when a backend is reachable),
 DK_WATCH_MODELS (default: cheap/fast - haiku hosted, the local model
 otherwise), DK_WATCH_TURNS (how many recent messages to read, default 6),
 DK_ACTIVE_TTL (seconds .dk_active stays valid, default 3600), plus the
-shared DK_BACKEND / DK_API_URL / DK_KEY_FILE / ANTHROPIC_API_KEY.
+shared DK_BACKEND / DK_API_URL / DK_KEY_FILE / DK_API_KEY.
 """
 import json
 import os
@@ -137,7 +137,13 @@ def mark(ok, why=""):
 
 
 def read_key():
-    k = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    # DK_API_KEY first: the key is provider-neutral, and dk-mode talks to
+    # OpenRouter and local servers as readily as to Anthropic. Reading only
+    # ANTHROPIC_API_KEY meant an OpenRouter user had to put an OpenRouter key
+    # into a variable named for a different vendor. ANTHROPIC_API_KEY is still
+    # honoured so existing installs keep working.
+    k = (os.environ.get("DK_API_KEY", "").strip()
+         or os.environ.get("ANTHROPIC_API_KEY", "").strip())
     if k:
         return k
     path = os.environ.get("DK_KEY_FILE", "").strip()

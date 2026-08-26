@@ -47,9 +47,10 @@ dk-mode uses three sources. You do no additional work for these sources.
 
 ## Install dk-mode
 
-Do these steps.
+Do these four steps in this sequence. Step 2 is necessary before step 3. If
+you mine without a model, dk-mode finds almost nothing.
 
-1. Get the code and install it into your project.
+### 1. Install the code into your project
 
 ```bash
 git clone https://github.com/milesarthursmith/dk-mode.git
@@ -66,27 +67,25 @@ Use `--no-hooks` to prevent the change to the settings file. Use `--update`
 to refresh the copy in your project. It is safe to run the installer again.
 The installer does not replace the memory files.
 
-2. Mine your history. An empty file gives no reminders.
-
-```bash
-./scripts/dk_backfill.sh --target /path/to/your/project
-python3 scripts/dk_consolidate.py --drain
-```
-
-## Select the models
+### 2. Give dk-mode a model
 
 dk-mode makes two different model calls. Set them separately.
 
 - The **per-turn call** does a quick selection. Use a cheap model.
 - The **interval call** makes a judgement. Use a better model.
 
-For OpenRouter, or for a different server with the OpenAI format, set these
-variables:
+For the Anthropic API, set one variable:
+
+```bash
+export DK_API_KEY=sk-ant-...   # or an OpenRouter key, or any other
+```
+
+For OpenRouter, or for a different server with the OpenAI format:
 
 ```bash
 export DK_BACKEND=openai
 export DK_API_URL=https://openrouter.ai/api/v1/chat/completions
-export DK_KEY_FILE=~/.claude/secrets/openrouter_key
+export DK_KEY_FILE=~/.claude/secrets/openrouter_key   # or use DK_API_KEY
 export DK_WATCH_MODELS=openai/gpt-5.6-luna    # per turn, cheap
 export DK_MODELS=openai/gpt-5.6-terra         # at an interval, better
 ```
@@ -95,7 +94,36 @@ Examine openrouter.ai/models for the current model names and prices. Ollama,
 LM Studio, llama.cpp and vLLM use the same format. Set `DK_API_URL` to the
 address of the local server, for example
 `http://localhost:11434/v1/chat/completions`. A local server does not need a
-key. If you do not set `DK_BACKEND`, dk-mode calls the Anthropic API.
+key.
+
+Put the same variables into the two hook commands in your settings file.
+Then the hooks also have a model.
+
+### 3. Mine your history
+
+An empty file gives no reminders. This step reads your old conversations.
+
+```bash
+./scripts/dk_backfill.sh --target /path/to/your/project
+python3 scripts/dk_consolidate.py --drain --target /path/to/your/project
+```
+
+Read the output of the first command. It tells you how many corrections it
+found **by reading**. If that number is 0, dk-mode did not reach a model.
+Correct step 2 and run the command again. The entries from the phrase match
+alone are almost all noise.
+
+### 4. Approve the rules
+
+This step is necessary only with `DK_APPROVAL=1`. dk-mode holds each new rule
+back until you approve it.
+
+```bash
+python3 scripts/dk_review.py --list --target /path/to/your/project
+python3 scripts/dk_review.py --approve 1 2 5 --target /path/to/your/project
+```
+
+In Claude Code, the `/dk-review` command does the same steps.
 
 ## Test dk-mode
 
@@ -121,28 +149,49 @@ is in `~/Library/Logs`.
 
 ## Settings
 
-All of these settings are optional.
+All of these settings are optional. Most installations set only the first
+four.
+
+dk-mode is not specific to one model vendor. It speaks two request formats:
+the Anthropic format and the OpenAI format. OpenRouter, Ollama, LM Studio,
+llama.cpp and vLLM all use the OpenAI format. Therefore dk-mode can use
+almost any model.
+
+### The model
 
 | Setting | Default | Function |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | — | The key for the model calls. |
-| `DK_KEY_FILE` | — | A file that contains the key. If you set neither variable, the model stages do nothing. |
-| `DK_BACKEND` | `anthropic` | Set it to `openai` for OpenRouter, Ollama, LM Studio, llama.cpp or vLLM. |
-| `DK_API_URL` | Anthropic | The address for the requests. |
+| `DK_API_KEY` | — | The key for the model calls, for any vendor. `ANTHROPIC_API_KEY` also operates, for an older installation. |
+| `DK_KEY_FILE` | — | A file that contains the key. Use this instead of `DK_API_KEY`. If you set neither one, the model stages do nothing and say so. |
+| `DK_BACKEND` | `anthropic` | The request format. Set it to `openai` for OpenRouter, Ollama, LM Studio, llama.cpp or vLLM. |
+| `DK_API_URL` | the Anthropic API | The address for the requests. Set it to the address of your server. |
 | `DK_MODELS` | Fable, then Opus | The models for the interval call. Use a comma between the names. dk-mode tries them in sequence. |
 | `DK_WATCH_MODELS` | Haiku | The model for the per-turn call. Use a cheap model. |
-| `DK_WATCH` | `1` | Set it to `0` to stop the per-turn call. |
+
+A local server does not need a key. Set `DK_BACKEND=openai` and `DK_API_URL`,
+and dk-mode operates with no key.
+
+### The behaviour
+
+| Setting | Default | Function |
+|---|---|---|
 | `DK_APPROVAL` | `0` | Set it to `1` to approve each new rule before use. Set it to `auto` to approve a rule after a number of occurrences. |
 | `DK_AUTO_APPROVE_COUNT` | `3` | The number of occurrences for `auto`. |
 | `DK_INTERVAL` | `7d` | The interval between the interval calls. Examples: `1h`, `per-turn`. |
 | `DK_USER_NAME` | — | Your name. The model then knows who "the user" is. |
+| `DK_WATCH` | `1` | Set it to `0` to stop the per-turn call. |
+| `DK_SCAN_LINES` | `150` | The quantity of the conversation to read. Set it to `0` to read all of it. |
+
+### The less usual settings
+
+| Setting | Default | Function |
+|---|---|---|
 | `DK_BATCH` | `200` | The quantity of corrections for one interval call. Decrease it for a small local model. |
 | `DK_REASONING_EFFORT` | — | Set it to `none` to stop the reasoning stage of a local model. |
-| `DK_WATCH_MAX_TOKENS` | `2000` | The maximum length of the reply to the per-turn call. |
+| `DK_WATCH_MAX_TOKENS` | `2000` | The maximum length of the reply to the per-turn call. A reasoning model needs a large value. |
 | `DK_TIMEOUT` | `180` / `600` | The number of seconds to wait. A local model is slower. |
 | `DK_LOG_DIR` | `~/Library/Logs` | The directory for the error logs. |
 | `DK_BACKFILL_SEMANTIC` | `1` | Set it to `0` to mine with a word match only. Then dk-mode finds almost nothing. Use it only to debug. |
-| `DK_SCAN_LINES` | `150` | The quantity of the conversation to read. Set it to `0` to read all of it. |
 | `DK_SESSION_ID` | — | Claude Code sets this variable. It keeps the reminders of one conversation separate from a different conversation. |
 
 ## The files in your project

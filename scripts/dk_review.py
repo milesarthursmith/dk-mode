@@ -42,7 +42,25 @@ def find_root(start):
     return os.getcwd()
 
 
-ROOT = os.environ.get("CLAUDE_PROJECT_DIR") or find_root(SCRIPT_DIR)
+def _target_arg():
+    """--target DIR, so a manual review can name its project. Without it ROOT
+    fell back to a walk-up from the script location, which is dk-mode's own
+    checkout rather than the project whose rules you meant to review."""
+    if "--target" in sys.argv:
+        i = sys.argv.index("--target")
+        if i + 1 < len(sys.argv):
+            d = os.path.abspath(sys.argv[i + 1])
+            # Remove both tokens so the rest of the argument parsing never
+            # sees them - "--approve 1 2 --target DIR" must not read DIR as
+            # an item number.
+            del sys.argv[i:i + 2]
+            return d
+        del sys.argv[i]
+    return None
+
+
+ROOT = (_target_arg() or os.environ.get("CLAUDE_PROJECT_DIR")
+        or find_root(SCRIPT_DIR))
 MEM = os.path.join(ROOT, ".claude", "memory")
 RULES = os.path.join(MEM, "dk_rules.md")
 LOCK = os.path.join(MEM, ".dk-consolidate.lock")

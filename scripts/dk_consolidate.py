@@ -14,7 +14,8 @@ large history.
 
 Uses the raw Anthropic API over stdlib urllib - no SDK, no venv, and never
 the `claude` CLI (headless CLI auth is unreliable in automation). Key
-resolution: ANTHROPIC_API_KEY env var, else the file at DK_KEY_FILE; if
+resolution: DK_API_KEY (or legacy ANTHROPIC_API_KEY) env var, else the
+file at DK_KEY_FILE; if
 neither resolves, exits silently (capture and recall still work without it).
 
 Deliberate properties:
@@ -29,7 +30,7 @@ Deliberate properties:
 - Detailed errors go to DK_LOG_DIR (default ~/Library/Logs on macOS,
   else ~/.claude/logs) - never /tmp, which the OS cleans.
 
-Config (all optional): ANTHROPIC_API_KEY, DK_KEY_FILE, DK_MODELS
+Config (all optional): DK_API_KEY, DK_KEY_FILE, DK_MODELS
 (comma-separated, tried in order), DK_USER_NAME, DK_INTERVAL,
 DK_LOG_DIR, DK_API_URL (test override).
 """
@@ -60,7 +61,37 @@ def find_root(start):
     return os.getcwd()
 
 
-ROOT = os.environ.get("CLAUDE_PROJECT_DIR") or find_root(SCRIPT_DIR)
+def _target_arg():
+    """--target DIR, for running this by hand against another project.
+    Without it a manual run silently consolidated the WRONG project: ROOT
+    fell back to a walk-up from the script, which is dk-mode's own checkout,
+    not the project you just mined."""
+    if "--target" in sys.argv:
+        i = sys.argv.index("--target")
+        if i + 1 < len(sys.argv):
+            d = os.path.abspath(sys.argv[i + 1])
+            # Remove both tokens so the rest of the argument parsing never
+            # sees them - "--approve 1 2 --target DIR" must not read DIR as
+            # an item number.
+            del sys.argv[i:i + 2]
+            return d
+        del sys.argv[i]
+    return None
+
+
+# Manual runs should explain themselves; the hook-kicked background run must
+# stay quiet. --drain and --target are only ever typed by a human.
+INTERACTIVE = ("--drain" in sys.argv or "--target" in sys.argv
+               or sys.stderr.isatty())
+
+
+def note(msg):
+    if INTERACTIVE:
+        print("dk-consolidate: " + msg, file=sys.stderr)
+
+
+ROOT = (_target_arg() or os.environ.get("CLAUDE_PROJECT_DIR")
+        or find_root(SCRIPT_DIR))
 MEM = os.path.join(ROOT, ".claude", "memory")
 RAW = os.path.join(MEM, "dk.jsonl")
 RULES = os.path.join(MEM, "dk_rules.md")
@@ -197,7 +228,13 @@ def take_lock():
 
 
 def read_key():
-    k = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    # DK_API_KEY first: the key is provider-neutral, and dk-mode talks to
+    # OpenRouter and local servers as readily as to Anthropic. Reading only
+    # ANTHROPIC_API_KEY meant an OpenRouter user had to put an OpenRouter key
+    # into a variable named for a different vendor. ANTHROPIC_API_KEY is still
+    # honoured so existing installs keep working.
+    k = (os.environ.get("DK_API_KEY", "").strip()
+         or os.environ.get("ANTHROPIC_API_KEY", "").strip())
     if k:
         return k
     path = os.environ.get("DK_KEY_FILE", "").strip()
@@ -509,13 +546,19 @@ def run_batch(key):
 def main():
     drain = "--drain" in sys.argv
     if not os.path.isdir(MEM) or not os.path.isfile(RULES):
+        note("no dk-mode memory at %s - is --target/CLAUDE_PROJECT_DIR right?"
+             % ROOT)
         sys.exit(0)
+    note("project: %s" % ROOT)
     key = read_key()
     # A local OpenAI-compatible server (Ollama/LM Studio/llama.cpp) needs no
     # key; only the hosted path requires one.
     if not key and BACKEND != "openai":
-        sys.exit(0)  # no key resolvable: silent no-op
+        note("no API key (set DK_API_KEY or DK_KEY_FILE, or set "
+             "DK_BACKEND=openai for a local server) - nothing to do")
+        sys.exit(0)
     if not take_lock():
+        note("another consolidation holds the lock - skipped")
         sys.exit(0)
     try:
         # Re-check dueness after acquiring the lock (a second session may
@@ -533,6 +576,8 @@ def main():
                     pass
                 last = int(st.get("last_attempt_epoch", "0") or 0)
                 if time.time() - last < min(iv, 3600):
+                    note("not due yet (DK_INTERVAL=%s) - use --drain to force"
+                         % os.environ.get("DK_INTERVAL", "7d"))
                     sys.exit(0)
 
         total_processed = 0

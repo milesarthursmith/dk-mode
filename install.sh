@@ -23,7 +23,7 @@
 #              policy-gated and must be made by a person)
 #
 # Config the CONSUMING project may set (in the hook command string or the
-# environment): ANTHROPIC_API_KEY or DK_KEY_FILE, DK_MODELS,
+# environment): DK_API_KEY or DK_KEY_FILE, DK_MODELS,
 # DK_USER_NAME, DK_INTERVAL, DK_LOG_DIR. See README.md.
 set -euo pipefail
 

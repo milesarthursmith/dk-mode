@@ -76,10 +76,16 @@ echo "backfill: $((after - before)) new entries (total $after) in $RAW"
 echo "backfill: $semantic_total of them found by reading, the rest by phrase match"
 if [ "${DK_BACKFILL_SEMANTIC:-1}" = "0" ]; then
   echo "backfill: semantic pass DISABLED - expect a near-empty yield"
-elif [ "$semantic_total" = "0" ] && [ "$((after - before))" -lt 3 ]; then
-  echo "backfill: WARNING - the semantic pass found nothing. Check a model is"
-  echo "          reachable (DK_BACKEND/DK_API_URL/key), or history really is clean."
+elif [ "$semantic_total" = "0" ]; then
+  # Gated on the phrase-match count before, so a run with 3+ phrase hits and a
+  # dead model reported success. Phrase hits are mostly noise (measured: 0 of
+  # 46 real corrections), so a zero semantic yield is the warning, whatever
+  # the phrase pass returned.
+  echo "backfill: WARNING - the reading pass found NOTHING; every entry above"
+  echo "          came from phrase matching, which measured 0 of 46 real"
+  echo "          corrections. Check a model is reachable: DK_API_KEY or"
+  echo "          DK_KEY_FILE, or DK_BACKEND=openai + DK_API_URL for a local one."
 fi
 if [ "$after" -gt "$before" ]; then
-  echo "next: python3 $SCRIPT_DIR/dk_consolidate.py --drain   # process the backlog now"
+  echo "next: python3 $SCRIPT_DIR/dk_consolidate.py --drain --target $TARGET"
 fi
