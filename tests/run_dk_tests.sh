@@ -926,6 +926,42 @@ else
   bad "hits=$hits warning missing; got: $out"
 fi
 
+# --- 81-82: the watcher must not sit behind the phrase guard ----------------
+# It did. The kick was at the BOTTOM of dk_capture.sh, below the phrase
+# guard's `|| exit 0`, so the relevance layer AND the semantic miner only ran
+# on turns the phrase list matched - which is almost never, and usually noise.
+# The system was gated behind its own weakest component.
+
+t "81. the watcher runs on a turn with NO trigger phrase (it is the real miner)"
+sandbox
+mkdir -p "$SB/bin"
+cat > "$SB/bin/dk_watch.py" <<'PYX'
+import sys, os
+open(os.environ["WATCH_MARK"], "a").write("ran\n")
+PYX
+cp "$SCRIPTS/dk_capture.sh" "$SB/bin/dk_capture.sh"
+python3 - "$SB/t.jsonl" <<'PYX'
+import json, sys
+r = {"type": "user", "uuid": "u1", "isSidechain": False,
+     "timestamp": "2026-08-26T00:00:00Z",
+     "message": {"role": "user", "content": "bit lame, simplify it"}}
+open(sys.argv[1], "w").write(json.dumps(r) + "\n")
+PYX
+MARK="$SB/watch.mark"
+printf '{"transcript_path":"%s","session_id":"s1"}' "$SB/t.jsonl" \
+  | env CLAUDE_PROJECT_DIR="$SB" HOME="$SB/home" WATCH_MARK="$MARK" \
+        bash "$SB/bin/dk_capture.sh"
+sleep 1
+if [ -s "$MARK" ]; then ok; else bad "watcher never ran on a no-phrase turn"; fi
+
+t "82. DK_WATCH=0 still suppresses the watcher"
+rm -f "$MARK"
+printf '{"transcript_path":"%s","session_id":"s1"}' "$SB/t.jsonl" \
+  | env CLAUDE_PROJECT_DIR="$SB" HOME="$SB/home" WATCH_MARK="$MARK" DK_WATCH=0 \
+        bash "$SB/bin/dk_capture.sh"
+sleep 1
+if [ -s "$MARK" ]; then bad "watcher ran despite DK_WATCH=0"; else ok; fi
+
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
 [ "$FAIL" = "0" ] || exit 1

@@ -53,6 +53,22 @@ TRANSCRIPT="$(printf '%s' "$PAYLOAD" | grep -o '"transcript_path"[[:space:]]*:[[
 SESSION="$(printf '%s' "$PAYLOAD" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:[[:space:]]*"//; s/"$//' || true)"
 [ -n "$TRANSCRIPT" ] && [ -r "$TRANSCRIPT" ] || exit 0
 
+# --- relevance layer (FIRST - before any guard can exit) --------------------
+# This MUST run on EVERY turn. It is both the relevance layer and the real
+# miner, and it is the only part that finds how people actually steer
+# ("bit lame", "simplify"). It used to sit at the BOTTOM of this script,
+# below the phrase guard - so it only ever ran on turns where the phrase list
+# matched, which is almost never, and when it did the match was usually noise.
+# The whole system was gated behind its own weakest component. Backgrounded
+# and detached, so turn end is never delayed by a model call; a silent no-op
+# when no backend is configured. Skipped only during backfill (SCAN_LINES=0),
+# where there is no "right now" to be relevant to.
+if [ "$SCAN_LINES" != "0" ] && [ "${DK_WATCH:-1}" != "0" ]; then
+  nohup python3 "$(cd "$(dirname "$0")" && pwd)/dk_watch.py" "$TRANSCRIPT" \
+    >/dev/null 2>&1 &
+  disown 2>/dev/null || true
+fi
+
 # Fast guard: any trigger phrase anywhere in the scanned region? This is
 # loose on purpose (matches assistant text too); the python step below
 # applies the precise, user-message-only matching. Apostrophes are matched
@@ -269,17 +285,5 @@ if new:
                 f'{"entry" if len(new) == 1 else "entries"} '
                 f'(signal: "{sig}") session {session[:8]}\n')
 PY
-
-# --- relevance layer -------------------------------------------------------
-# Kick the watcher: it reads the turn that just happened and writes the
-# selection the NEXT prompt will inject. Backgrounded and detached so turn
-# end is never delayed by an LLM call; silent no-op when no backend is
-# configured. Skipped during backfill (SCAN_LINES=0), where there is no
-# "right now" to be relevant to.
-if [ "$SCAN_LINES" != "0" ] && [ "${DK_WATCH:-1}" != "0" ]; then
-  nohup python3 "$(cd "$(dirname "$0")" && pwd)/dk_watch.py" "$TRANSCRIPT" \
-    >/dev/null 2>&1 &
-  disown 2>/dev/null || true
-fi
 
 exit 0
