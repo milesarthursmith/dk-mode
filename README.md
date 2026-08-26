@@ -16,9 +16,15 @@ This document uses Simplified Technical English (ASD-STE100).
 dk-mode does three things.
 
 **1. It mines your history.** Claude Code keeps each conversation in a file
-on your computer. dk-mode reads these files. It finds each moment when you
-corrected Claude. It keeps your words. It also keeps the words of Claude
-before your correction.
+on your computer. A model reads these files. It finds each moment when you
+corrected Claude, and each moment when Claude corrected itself. The script
+then copies the words from the file. It also keeps the three messages before
+each correction, which show what the correction was about.
+
+A word search does not do this work. dk-mode had one, and a measurement
+removed it: against a real conversation it found 0 of 46 corrections. People
+do not announce a correction. They redirect. "bit lame", "simplify" and "why
+is this so slow" are all corrections, and no word list finds them.
 
 **2. It makes rules.** At an interval, a model reads the collected
 corrections. The model sorts them. It marks a repeated correction as a rule.
@@ -108,10 +114,8 @@ An empty file gives no reminders. This step reads your old conversations.
 python3 scripts/dk_consolidate.py --drain --target /path/to/your/project
 ```
 
-Read the output of the first command. It tells you how many corrections it
-found **by reading**. If that number is 0, dk-mode did not reach a model.
-Correct step 2 and run the command again. The entries from the phrase match
-alone are almost all noise.
+Read the output of the first command. If it found nothing, dk-mode did not
+reach a model. Correct step 2 and run the command again.
 
 ### 4. Approve the rules
 
@@ -191,7 +195,6 @@ and dk-mode operates with no key.
 | `DK_WATCH_MAX_TOKENS` | `2000` | The maximum length of the reply to the per-turn call. A reasoning model needs a large value. |
 | `DK_TIMEOUT` | `180` / `600` | The number of seconds to wait. A local model is slower. |
 | `DK_LOG_DIR` | `~/Library/Logs` | The directory for the error logs. |
-| `DK_BACKFILL_SEMANTIC` | `1` | Set it to `0` to mine with a word match only. Then dk-mode finds almost nothing. Use it only to debug. |
 | `DK_SESSION_ID` | — | Claude Code sets this variable. It keeps the reminders of one conversation separate from a different conversation. |
 
 ## The files in your project

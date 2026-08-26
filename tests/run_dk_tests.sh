@@ -113,23 +113,6 @@ PY
 # =============================================================================
 echo "== capture =="
 
-t "1. correction captured verbatim, kind=correction, source=human"
-sandbox; run_capture "$FIX/transcript_correction.jsonl"
-if [ "$(lines "$RAW")" = "1" ] && grep -q '"kind": "correction"' "$RAW" \
-   && grep -q '"source": "human"' "$RAW" \
-   && grep -qF "you didn't actually run the tests" "$RAW"; then ok; else bad "raw: $(cat "$RAW")"; fi
-
-t "2. re-run on same transcript adds nothing (uuid dedupe)"
-run_capture "$FIX/transcript_correction.jsonl"
-if [ "$(lines "$RAW")" = "1" ]; then ok; else bad "$(lines "$RAW") lines"; fi
-
-t "3. heartbeat written when an entry was saved"
-if grep -q "| dk-capture | 1 entry" "$MEMLOG"; then ok; else bad "log: $(cat "$MEMLOG")"; fi
-
-t "4. instruction captured with kind=instruction"
-sandbox; run_capture "$FIX/transcript_instruction.jsonl"
-if [ "$(lines "$RAW")" = "1" ] && grep -q '"kind": "instruction"' "$RAW"; then ok; else bad "raw: $(cat "$RAW")"; fi
-
 t "5. clean transcript captures nothing, no heartbeat"
 sandbox; run_capture "$FIX/transcript_clean.jsonl"
 if [ ! -s "$RAW" ] && ! grep -q "dk-capture" "$MEMLOG"; then ok; else bad "raw/log dirty"; fi
@@ -143,10 +126,6 @@ t "7. trigger words in tool output / assistant text / sidechain / commands ignor
 sandbox; run_capture "$FIX/transcript_toolwords.jsonl"
 if [ ! -s "$RAW" ]; then ok; else bad "raw: $(cat "$RAW")"; fi
 
-t "8. corrupt transcript line tolerated, good entry still captured"
-sandbox; run_capture "$FIX/transcript_corrupt.jsonl"
-if [ "$(lines "$RAW")" = "1" ] && grep -qF "not what I asked" "$RAW"; then ok; else bad "raw: $(cat "$RAW")"; fi
-
 t "9. missing transcript path exits 0, writes nothing"
 sandbox
 printf '{}' | runenv bash "$SCRIPTS/dk_capture.sh"; rc=$?
@@ -158,27 +137,23 @@ run_capture "$FIX/transcript_correction.jsonl"; rc=$?
 if [ "$rc" = "0" ] && [ ! -s "$RAW" ]; then ok; else bad "rc=$rc"; fi
 rmdir "$SB/.claude/memory/.dk.lock"
 
-t "10b. isMeta turns are not the user: skill body, image paste, harness filler"
-sandbox; run_capture "$FIX/transcript_meta.jsonl" DK_SCAN_LINES=0
-if [ "$(lines "$RAW")" = "1" ] \
-   && grep -qF "you didn't run the tests" "$RAW" \
+t "10b. isMeta turns are never shown to the model: skill body, image paste, harness filler"
+sandbox; echo k > "$KEYF"
+ids=$(python3 -c "
+import json
+ids=[json.loads(l)['uuid'] for l in open('$FIX/transcript_meta.jsonl')]
+print(json.dumps({'active':[],'alert':None,
+                  'steering':[{'id':i,'source':'human','kind':'correction'} for i in ids]}))")
+start_watch_mock "$ids"
+runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_meta.jsonl"
+stop_mock
+# The model asked for every id in the file. Only the real human turn can land:
+# the rest were filtered out before the prompt, so their ids resolve to nothing.
+if grep -qF "you didn't run the tests" "$RAW" \
    && ! grep -q "Base directory for this skill" "$RAW" \
    && ! grep -q "\[Image:" "$RAW" \
    && ! grep -q "Continue from where you left off" "$RAW"; then ok; else bad "raw: $(cat "$RAW")"; fi
-
-t "11. default 150-line window misses a signal buried deep; SCAN_LINES=0 catches it"
-sandbox; run_capture "$FIX/transcript_deep.jsonl"
-deep_default=$(lines "$RAW")
-run_capture "$FIX/transcript_deep.jsonl" DK_SCAN_LINES=0
-if [ "$deep_default" = "0" ] && [ "$(lines "$RAW")" = "1" ] \
-   && grep -qF "you skipped the config step" "$RAW"; then ok; else bad "default=$deep_default after0=$(lines "$RAW")"; fi
-
-t "12. entry keeps the transcript's own timestamp (backfilled history dates right)"
-sandbox; run_capture "$FIX/transcript_timestamped.jsonl" DK_SCAN_LINES=0
-if grep -q '"ts": "2026-05-15T14:30:00+10:00"' "$RAW"; then ok; else bad "raw: $(cat "$RAW")"; fi
-
-# =============================================================================
-echo "== recall =="
 
 t "13. prints the note between the markers, markers stripped"
 sandbox; out=$(run_recall)
@@ -368,42 +343,48 @@ if grep -q "^consolidated_through: 450" "$RULES" \
 # =============================================================================
 echo "== backfill =="
 
-t "38. sweeps all projects' transcripts, catches deep signals, idempotent"
-sandbox
+t "38. sweeps all projects' transcripts and is idempotent"
+sandbox; echo k > "$KEYF"
 PROJ="$SB/home/.claude/projects"
 mkdir -p "$PROJ/proj-a" "$PROJ/proj-b"
 cp "$FIX/transcript_correction.jsonl" "$PROJ/proj-a/sess-aaaa.jsonl"
-cp "$FIX/transcript_deep.jsonl" "$PROJ/proj-a/sess-bbbb.jsonl"
+cp "$FIX/transcript_deep.jsonl"       "$PROJ/proj-a/sess-bbbb.jsonl"
 cp "$FIX/transcript_instruction.jsonl" "$PROJ/proj-b/sess-cccc.jsonl"
-out=$(runenv bash "$SCRIPTS/dk_backfill.sh" --transcripts "$PROJ" --target "$SB")
+# One canned reply per transcript: select every user id it is shown.
+start_watch_mock "ALL_USER"
+out=$(runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  bash "$SCRIPTS/dk_backfill.sh" --transcripts "$PROJ" --target "$SB")
 n1=$(lines "$RAW")
-runenv bash "$SCRIPTS/dk_backfill.sh" --transcripts "$PROJ" --target "$SB" >/dev/null
+runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  bash "$SCRIPTS/dk_backfill.sh" --transcripts "$PROJ" --target "$SB" >/dev/null
 n2=$(lines "$RAW")
-if [ "$n1" = "3" ] && [ "$n2" = "3" ] \
+stop_mock
+if [ "$n1" -ge 3 ] && [ "$n2" = "$n1" ] \
    && grep -qF "you skipped the config step" "$RAW" \
-   && printf '%s' "$out" | grep -q "scanned 3 transcripts"; then ok; else bad "n1=$n1 n2=$n2 out: $out"; fi
+   && printf '%s' "$out" | grep -q "scanned 3 transcripts"; then ok
+else bad "n1=$n1 n2=$n2 out: $out"; fi
 
-t "38b. backfill mines history by READING it, not just phrase-matching"
+t "38b. backfill mines history by READING it"
 sandbox; echo k > "$KEYF"
 PROJ="$SB/home/.claude/projects/p"; mkdir -p "$PROJ"
 cp "$FIX/transcript_real_missed.jsonl" "$PROJ/s1.jsonl"     # zero phrase matches
 ids=$(python3 -c "
 import json
 ids=[json.loads(l)['uuid'] for l in open('$FIX/transcript_real_missed.jsonl')]
-print(json.dumps({'active':[],'alert':None,'steering':[{'id':i,'kind':'correction'} for i in ids[:2]]}))")
+print(json.dumps({'active':[],'alert':None,'steering':[{'id':i,'source':'human','kind':'correction'} for i in ids[:2]]}))")
 start_watch_mock "$ids"
 out=$(runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
   bash "$SCRIPTS/dk_backfill.sh" --transcripts "$PROJ" --target "$SB")
 stop_mock
 if [ "$(lines "$RAW")" -ge 2 ] && grep -q '"signal": "semantic"' "$RAW" \
-   && printf '%s' "$out" | grep -q "found by reading"; then ok; else bad "out: $out raw=$(lines "$RAW")"; fi
+   && printf '%s' "$out" | grep -q "new entries"; then ok; else bad "out: $out raw=$(lines "$RAW")"; fi
 
-t "38c. backfill warns loudly when the semantic pass yields nothing"
+t "38c. backfill warns loudly when it mines nothing at all"
 sandbox
 PROJ="$SB/home/.claude/projects/p"; mkdir -p "$PROJ"
 cp "$FIX/transcript_real_missed.jsonl" "$PROJ/s1.jsonl"
-out=$(runenv DK_BACKFILL_SEMANTIC=0 bash "$SCRIPTS/dk_backfill.sh" --transcripts "$PROJ" --target "$SB")
-if printf '%s' "$out" | grep -q "semantic pass DISABLED"; then ok; else bad "out: $out"; fi
+out=$(runenv bash "$SCRIPTS/dk_backfill.sh" --transcripts "$PROJ" --target "$SB")
+if printf '%s' "$out" | grep -q "found NOTHING"; then ok; else bad "out: $out"; fi
 
 t "39. backfill refuses a target with no .claude/memory"
 sandbox
@@ -680,12 +661,23 @@ if [ "$kicked" = "yes" ] && [ "$backfill_kicked" = "no" ]; then ok; else bad "li
 # =============================================================================
 echo "== autonomous operation (no human in the loop) =="
 
-t "64. self-correction in an agent's own chat is captured (source=self), no human message needed"
-sandbox; run_capture "$FIX/transcript_autonomous.jsonl"
+t "64. self-correction in an agent's own chat is mined (source=self), no human message needed"
+sandbox; echo k > "$KEYF"
+start_watch_mock '{"active":[],"alert":null,"steering":[{"id":"a-2","source":"self","kind":"self-correction"}]}'
+runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_autonomous.jsonl"
+stop_mock
 if [ "$(lines "$RAW")" = "1" ] \
    && grep -q '"source": "self"' "$RAW" \
-   && grep -q '"kind": "self-correction"' "$RAW" \
    && grep -qF "I never ran the court gate" "$RAW"; then ok; else bad "raw: $(cat "$RAW")"; fi
+
+t "64b. an assistant id is source=self even if the model labels it human"
+sandbox; echo k > "$KEYF"
+start_watch_mock '{"active":[],"alert":null,"steering":[{"id":"a-2","source":"human","kind":"correction"}]}'
+runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_autonomous.jsonl"
+stop_mock
+if grep -q '"source": "self"' "$RAW"; then ok; else bad "raw: $(cat "$RAW")"; fi
 
 t "65. ordinary assistant chatter is not mistaken for self-correction"
 sandbox; run_capture "$FIX/transcript_assistant_clean.jsonl"
@@ -722,19 +714,18 @@ t "69. DK_APPROVAL=auto leaves a low-count item pending (repetition is the evide
 if grep -A2 "Check MEMORY.md before building" "$RULES" | grep -q '\*\*Status:\*\* pending' \
    && ! printf '%s' "$note" | grep -q "always check MEMORY.md"; then ok; else bad "$(grep -A3 'Check MEMORY' "$RULES")"; fi
 
-t "70. end to end with no human: self-correction -> consolidation -> live injection"
+t "70. end to end with no human: self-correction -> mined -> live injection"
 sandbox; echo k > "$KEYF"
-run_capture "$FIX/transcript_autonomous.jsonl" DK_WATCH=0
-captured=$(lines "$RAW")
 cp "$FIX/rules_mixed_approval.md" "$RULES"
-start_watch_mock '{"active":[1],"alert":"You said checks passed without running the gate."}'
+start_watch_mock '{"active":[1],"alert":"You said checks passed without running the gate.","steering":[{"id":"a-2","source":"self","kind":"self-correction"}]}'
 runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
   python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_autonomous.jsonl"
 stop_mock
 out=$(run_recall)
-if [ "$captured" = "1" ] \
+if [ "$(lines "$RAW")" = "1" ] \
+   && grep -q '"source": "self"' "$RAW" \
    && printf '%s' "$out" | grep -q "without running the gate" \
-   && printf '%s' "$out" | grep -q "never say a check passed"; then ok; else bad "out: $out"; fi
+   && printf '%s' "$out" | grep -q "never say a check passed"; then ok; else bad "out: $out raw: $(cat "$RAW")"; fi
 
 # =============================================================================
 echo "== semantic capture (what the phrase list cannot see) =="
@@ -818,17 +809,6 @@ runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
 stop_mock
 if [ ! -s "$RAW" ]; then ok; else bad "invented: $(cat "$RAW")"; fi
 
-t "75. semantic capture dedupes against what the phrase list already logged"
-sandbox; echo k > "$KEYF"
-run_capture "$FIX/transcript_correction.jsonl" DK_WATCH=0
-before=$(lines "$RAW")
-uid=$(python3 -c "import json;print([json.loads(l)['uuid'] for l in open('$RAW')][0])")
-start_watch_mock "{\"active\":[],\"alert\":null,\"steering\":[{\"id\":\"$uid\",\"kind\":\"correction\"}]}"
-runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
-  python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_correction.jsonl"
-stop_mock
-if [ "$before" = "1" ] && [ "$(lines "$RAW")" = "1" ]; then ok; else bad "before=$before after=$(lines "$RAW")"; fi
-
 t "76. cold start: no rules yet, semantic capture still works (that is how rules begin)"
 sandbox; echo k > "$KEYF"   # template rules file has zero approved items
 start_watch_mock '{"active":[],"alert":null,"steering":[{"id":"u-c-2","kind":"correction"}]}'
@@ -903,35 +883,6 @@ if printf '%s' "$out" | grep -q "^approved:" \
    && grep -q '\*\*Status:\*\* approved' "$RULES"; then ok
 else bad "approve+target failed; got: $out"; fi
 
-t "80. backfill warns when the reading pass found nothing, even with 3+ phrase hits"
-sandbox
-mkdir -p "$SB/tr"
-python3 - "$SB/tr/a.jsonl" <<'PYX'
-import json, sys
-rows = []
-for i, msg in enumerate(["you didn't run the tests",
-                         "from now on always check MEMORY.md",
-                         "that's not what I asked for"]):
-    rows.append({"type": "user", "uuid": "u%d" % i, "isSidechain": False,
-                 "timestamp": "2026-08-01T00:0%d:00Z" % i,
-                 "message": {"role": "user", "content": msg}})
-open(sys.argv[1], "w").write("\n".join(json.dumps(r) for r in rows) + "\n")
-PYX
-out=$(env HOME="$SB/home" ANTHROPIC_API_KEY="" DK_KEY_FILE="$SB/home/nokey" \
-  bash "$SCRIPTS/dk_backfill.sh" --target "$SB" --transcripts "$SB/tr" 2>&1)
-hits=$(grep -c . "$RAW" 2>/dev/null || echo 0)
-if [ "$hits" -ge 3 ] && printf '%s' "$out" | grep -q "reading pass found NOTHING"; then
-  ok
-else
-  bad "hits=$hits warning missing; got: $out"
-fi
-
-# --- 81-82: the watcher must not sit behind the phrase guard ----------------
-# It did. The kick was at the BOTTOM of dk_capture.sh, below the phrase
-# guard's `|| exit 0`, so the relevance layer AND the semantic miner only ran
-# on turns the phrase list matched - which is almost never, and usually noise.
-# The system was gated behind its own weakest component.
-
 t "81. the watcher runs on a turn with NO trigger phrase (it is the real miner)"
 sandbox
 mkdir -p "$SB/bin"
@@ -961,6 +912,98 @@ printf '{"transcript_path":"%s","session_id":"s1"}' "$SB/t.jsonl" \
         bash "$SB/bin/dk_capture.sh"
 sleep 1
 if [ -s "$MARK" ]; then bad "watcher ran despite DK_WATCH=0"; else ok; fi
+
+# =============================================================================
+echo "== wiring: enter ONLY through the real hook command =="
+# The suite had 89 green tests while the miner never ran on a normal turn.
+# Every test called the component it was testing directly, so none could see
+# that nothing reached it. These tests take the command string out of the
+# settings.json that install.sh actually writes, and run THAT. If a guard is
+# ever put in front of the miner again, these fail and the unit tests do not.
+
+hook_cmd() {  # hook_cmd <Stop|UserPromptSubmit> <settings.json>
+  python3 -c "
+import json, sys
+d = json.load(open(sys.argv[2]))
+for e in d['hooks'][sys.argv[1]]:
+    for h in e['hooks']:
+        if 'dk_' in h['command']:
+            print(h['command']); raise SystemExit
+" "$1" "$2"
+}
+
+t "83. the Stop hook mines a turn that contains no trigger phrase at all"
+sandbox; echo k > "$KEYF"
+PROJ="$SB/proj"; mkdir -p "$PROJ"
+# DK_REPO_URL is deliberately unreachable: it forces install.sh to copy the
+# local working tree instead of cloning from GitHub. Without it these tests
+# install the LAST PUSHED code and pass no matter what is broken here - which
+# is exactly what they did when first written.
+(cd "$REPO" && DK_REPO_URL="file:///nonexistent-$$" ./install.sh --target "$PROJ" >/dev/null 2>&1)
+grep -q "nohup python3" "$PROJ/.claude/vendor/dk-mode/scripts/dk_capture.sh" \
+  || bad "vendor copy is not the working tree - test would be vacuous"
+python3 - "$SB/t.jsonl" <<'PYX'
+import json, sys
+rows = [
+  {"type": "assistant", "uuid": "x1", "isSidechain": False,
+   "timestamp": "2026-08-26T00:00:00Z",
+   "message": {"role": "assistant", "content": "I built a new helper for this."}},
+  {"type": "user", "uuid": "x2", "isSidechain": False,
+   "timestamp": "2026-08-26T00:01:00Z",
+   "message": {"role": "user", "content": "bit lame, simplify it"}},
+]
+open(sys.argv[1], "w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+PYX
+# A realistic project has at least one approved rule; without one the
+# selection has nothing to select and the test exercises an empty path.
+cp "$FIX/rules_mixed_approval.md" "$PROJ/.claude/memory/dk_rules.md"
+start_watch_mock "ALL_USER"
+CMD=$(hook_cmd Stop "$PROJ/.claude/settings.json")
+printf '{"transcript_path":"%s","session_id":"wire1234"}' "$SB/t.jsonl" \
+  | env CLAUDE_PROJECT_DIR="$PROJ" HOME="$SB/home" DK_KEY_FILE="$KEYF" \
+        DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+        bash -c "$CMD"
+for _ in $(seq 1 40); do [ -s "$PROJ/.claude/memory/dk.jsonl" ] && break; sleep 0.25; done
+stop_mock
+if grep -qF "bit lame, simplify it" "$PROJ/.claude/memory/dk.jsonl" 2>/dev/null; then ok
+else bad "hook did not mine it; raw: $(cat "$PROJ/.claude/memory/dk.jsonl" 2>/dev/null)"; fi
+
+t "84. the UserPromptSubmit hook injects what the Stop hook's run selected"
+CMD=$(hook_cmd UserPromptSubmit "$PROJ/.claude/settings.json")
+out=$(printf '{"prompt":"ship it","session_id":"wire1234"}' \
+  | env CLAUDE_PROJECT_DIR="$PROJ" HOME="$SB/home" bash -c "$CMD")
+# Assert the LIVE selection, not just the tag: the static fallback note also
+# prints <self-steering>, so the first version of this test passed even when
+# the Stop hook had mined nothing at all.
+if printf '%s' "$out" | grep -q "MOCK-LIVE-ALERT"; then ok
+else bad "static fallback, not the live selection; got: [$out]"; fi
+
+t "85. no path in dk_capture.sh can exit before the miner is launched"
+# Structural, deliberately. This is the exact regression: the launch sat below
+# a guard's early exit, so it never ran and every unit test still passed.
+# Must match the LAUNCH, not a comment naming the file. Written as a grep for
+# any dk_watch.py mention first time round, which matched a header comment on
+# line 5 and therefore counted zero guards above it - it could never fail.
+launch=$(grep -n "nohup python3.*dk_watch.py" "$SCRIPTS/dk_capture.sh" | head -1 | cut -d: -f1)
+[ -n "$launch" ] || launch=999
+guards=$(awk -v L="$launch" 'NR < L && /exit 0/ && !/^#/ {n++} END {print n+0}' \
+         "$SCRIPTS/dk_capture.sh")
+# Two are legitimate and must stay: no memory dir, and no readable transcript.
+if [ "$guards" -le 2 ]; then ok
+else bad "$guards early exits sit above the miner launch (max 2 allowed)"; fi
+
+t "86. an alert still reaches the prompt when no rule is approved yet"
+# The write was gated on `rules` alone, so a project with nothing approved
+# threw the alert away. An alert is generated from the conversation and needs
+# no rules at all - a brand new install is exactly when a warning is useful.
+sandbox; echo k > "$KEYF"
+start_watch_mock '{"active":[],"alert":"You are about to claim done without running it.","steering":[]}'
+runenv DK_SESSION_ID=freshsess DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_autonomous.jsonl"
+stop_mock
+out=$(printf '{"prompt":"x","session_id":"freshsess"}' | runenv bash "$SCRIPTS/dk_recall.sh")
+if printf '%s' "$out" | grep -q "claim done without running it"; then ok
+else bad "alert lost with no approved rules; got: [$out]"; fi
 
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"

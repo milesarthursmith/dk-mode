@@ -279,9 +279,17 @@ simply moving on to the next task. A question that implies the work is \
 wrong ("why is this so slow?") IS steering; a question seeking information \
 is not.
 
+Also report any [assistant] message where the AGENT corrected ITSELF - said \
+its own approach was wrong, that something did not work, that it had made a \
+mistake, or that it needed to start over. Mark these with source "self". \
+This is weaker evidence than a human correction: a plan changing course is \
+not always a failure worth remembering, so only report a clear admission of \
+a mistake, not ordinary iteration.
+
 Reply with ONLY a JSON object, no prose, no code fences:
 {{"active": [ids], "alert": "..." or null,
- "steering": [{{"id": "<message id>", "kind": "correction|instruction|preference"}}]}}
+ "steering": [{{"id": "<message id>", "source": "human|self",
+               "kind": "correction|instruction|preference"}}]}}
 
 === RULES ===
 {rules}
@@ -333,10 +341,13 @@ def write_steering(selection, convo, raw_path, memlog):
     # A correction without what it was correcting is unusable later - the
     # consolidator cannot tell a real failure mode from a passing remark.
     # So carry the exchange that led up to it, not just the words.
+    # Both roles are addressable: a user message is a correction OF the agent,
+    # an assistant message may be the agent correcting ITSELF. The second used
+    # to be found by a separate phrase list in dk_capture.sh; that list found
+    # nothing and gated the whole system, so it was deleted and its job moved
+    # here.
     by_id = {}
     for i, m in enumerate(convo):
-        if m["role"] != "user":
-            continue
         lead = []
         for prev in convo[max(0, i - 3):i]:
             lead.append(f'[{prev["role"]}] {prev["text"][:900]}')
@@ -356,11 +367,14 @@ def write_steering(selection, convo, raw_path, memlog):
         if not msg or f'"{uid}"' in seen:
             continue
         kind = str(item.get("kind", "correction"))[:40]
+        # Trust the message's real role over the model's label: if it points
+        # at an assistant message it is a self-correction whatever it claims.
+        src = "self" if msg["role"] == "assistant" else "human"
         new.append({
             "ts": msg["ts"] or now,
             "session": "",
             "uuid": uid,
-            "source": "human",
+            "source": src,
             "kind": kind,
             "signal": "semantic",      # found by reading, not by phrase match
             "text": msg["text"][:600],
@@ -531,7 +545,12 @@ def main():
         if parsed is None:
             mark(False, f"unparseable response: {text[:200]!r}")
             return 0                   # malformed: leave the old file to expire
-        if rules:
+        # Write whenever there is anything to say, or when a previous
+        # selection needs clearing. Gating this on `rules` alone threw away
+        # the alert - which is generated from the conversation and needs no
+        # rules at all - so a project with nothing approved yet could never
+        # be warned about anything.
+        if rules or parsed[1] or os.path.exists(ACTIVE):
             atomic_write(ACTIVE, render(parsed[0], parsed[1], rules))
         n = write_steering(parsed[2], convo, os.path.join(MEM, "dk.jsonl"),
                            os.path.join(MEM, "log.md")) if parsed[2] else 0

@@ -31,8 +31,7 @@ transcript). Run against this project's own conversation history:
 
 The two "hits" were harness-injected pseudo-user turns, not the user. This is
 the single most important measurement in the project: it is why `dk_watch.py`
-exists, why mining is semantic, and why `DK_BACKFILL_SEMANTIC=0` is documented
-as debug-only.
+exists and why mining is done by reading.
 
 Fix, in two parts:
 

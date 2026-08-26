@@ -57,34 +57,26 @@ semantic_total=0
 while IFS= read -r -d '' t; do
   scanned=$((scanned + 1))
   session="$(basename "$t" .jsonl)"
-  printf '{"transcript_path":"%s","session_id":"%s"}' "$t" "$session" \
-    | CLAUDE_PROJECT_DIR="$TARGET" DK_SCAN_LINES=0 \
-      bash "$SCRIPT_DIR/dk_capture.sh" || true
-  # Phrase-matching alone measured ZERO real corrections found in a real
-  # 46-message session, so history mined that way is nearly empty. Read it
-  # too, unless explicitly disabled.
-  if [ "${DK_BACKFILL_SEMANTIC:-1}" != "0" ]; then
-    sem=$(CLAUDE_PROJECT_DIR="$TARGET" python3 "$SCRIPT_DIR/dk_watch.py" \
-            --capture-only "$t" 2>/dev/null | sed -n 's/^semantic: \([0-9]*\).*/\1/p')
-    semantic_total=$((semantic_total + ${sem:-0}))
-  fi
+  # One path only. The phrase-matching pass that used to run alongside this
+  # was deleted: it found 0 of 46 real corrections, and its early exit gated
+  # the reading pass it was supposed to complement.
+  sem=$(CLAUDE_PROJECT_DIR="$TARGET" python3 "$SCRIPT_DIR/dk_watch.py" \
+          --capture-only "$t" 2>/dev/null | sed -n 's/^semantic: \([0-9]*\).*/\1/p')
+  semantic_total=$((semantic_total + ${sem:-0}))
 done < <(find "$TRANSCRIPTS" -name '*.jsonl' -type f -print0)
 
 after=$(wc -l < "$RAW" 2>/dev/null | tr -d ' ' || echo 0)
 echo "backfill: scanned $scanned transcripts under $TRANSCRIPTS"
 echo "backfill: $((after - before)) new entries (total $after) in $RAW"
-echo "backfill: $semantic_total of them found by reading, the rest by phrase match"
-if [ "${DK_BACKFILL_SEMANTIC:-1}" = "0" ]; then
-  echo "backfill: semantic pass DISABLED - expect a near-empty yield"
-elif [ "$semantic_total" = "0" ]; then
+if [ "$semantic_total" = "0" ]; then
   # Gated on the phrase-match count before, so a run with 3+ phrase hits and a
   # dead model reported success. Phrase hits are mostly noise (measured: 0 of
   # 46 real corrections), so a zero semantic yield is the warning, whatever
   # the phrase pass returned.
-  echo "backfill: WARNING - the reading pass found NOTHING; every entry above"
-  echo "          came from phrase matching, which measured 0 of 46 real"
-  echo "          corrections. Check a model is reachable: DK_API_KEY or"
-  echo "          DK_KEY_FILE, or DK_BACKEND=openai + DK_API_URL for a local one."
+  echo "backfill: WARNING - found NOTHING. Reading the conversations is the"
+  echo "          only way this mines anything, so check a model is reachable:"
+  echo "          DK_API_KEY or DK_KEY_FILE, or DK_BACKEND=openai + DK_API_URL"
+  echo "          for a local one. An empty result otherwise means clean history."
 fi
 if [ "$after" -gt "$before" ]; then
   echo "next: python3 $SCRIPT_DIR/dk_consolidate.py --drain --target $TARGET"
