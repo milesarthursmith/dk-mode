@@ -19,6 +19,62 @@ version did and what measurement showed to be near useless (see 2026-08-25).
 
 ---
 
+## 2026-08-26 — the phrase pass deleted, and three wiring bugs it hid
+
+Miles: "The regex test is not worth it." Correct, and it was worse than
+useless. Checking why exposed three bugs of the same class — a component that
+was never reached — none of which 89 green tests could see.
+
+**Bug 1: the miner never ran.** `dk_capture.sh` launched `dk_watch.py` from
+the bottom of the script, below the phrase guard's early exit. On any turn
+with no trigger phrase the script exited first. Since the phrase list matches
+almost nothing, the miner and the relevance layer almost never started. The
+system was gated behind its own weakest component. Verified before the fix: a
+turn reading "bit lame, simplify it" never started the miner at all.
+
+**Bug 2: the selection was written where nothing reads it.** The session id
+was never passed to the miner, so it wrote `.dk_active.nosession` while
+`dk_recall.sh` looked for `.dk_active.<real-id>`. The live selection was never
+once consumed; every prompt fell back to the static note. Older than bug 1.
+
+**Bug 3: the alert was thrown away when no rule was approved.** The write was
+gated on `rules` alone. An alert is derived from the conversation and needs no
+rules, and a fresh install is exactly when one is useful.
+
+The phrase pass was then deleted outright: 289 lines of `dk_capture.sh` became
+a 60-line launcher, and backfill lost its second code path. The
+self-correction source lived inside it and moved into the reading prompt.
+
+### The suite was the actual defect
+
+Every test called the component it was testing directly, so none could tell
+that nothing reached it. Nine tests for the deleted pass were removed, six
+rewritten against the reading pass, and three added that take the command
+string out of the settings file the installer writes and run THAT.
+
+Those three were vacuous when first written, which only surfaced by
+re-introducing the bug and watching them pass:
+
+- Two called `install.sh`, which clones from GitHub — so they graded
+  already-pushed code, not the working tree. Now forced down the local-copy
+  path with an unreachable `DK_REPO_URL`.
+- The third located the launch with `grep dk_watch.py`, which matched a header
+  comment on line 5 and counted zero guards above it. Now matches the actual
+  `nohup` line.
+- A fourth asserted `<self-steering>` appeared, which the static fallback also
+  prints, so it passed when nothing had been mined. It now asserts a string
+  only the live selection produces — and that is what found bug 2.
+
+Each bug was re-introduced one at a time afterwards to confirm the test
+covering it fails. The watch mock now parses the prompt it receives instead of
+discarding it, so a test can assert what the model was and was not shown.
+
+Standing lesson: a green suite of unit tests says nothing about whether the
+units are connected. At least one test per path must enter the way the
+harness does.
+
+---
+
 ## 2026-08-25 — measurement: word matching alone finds almost nothing
 
 The first version detected corrections with a phrase list (regex over the
