@@ -252,6 +252,19 @@ a local model if you point `DK_BACKEND=openai` at one.
 
 ---
 
+## Which model runs where
+
+| Stage | Frequency | Job | Model |
+|---|---|---|---|
+| Capture (phrase tier) | every turn | string matching | none |
+| Relevance + reading capture | every turn | fast classification | cheap (`DK_WATCH_MODELS`) |
+| Consolidation | on an interval | judgement: is this a pattern? | strong (`DK_MODELS`) |
+
+Both model stages speak either the Anthropic API or the OpenAI chat format
+(`DK_BACKEND=openai`), which covers OpenRouter, Ollama, LM Studio, llama.cpp
+and vLLM. They are configured separately so the per-turn call can be cheap
+without making the weekly judgement call cheap too.
+
 ## Feeding it from your own tooling
 
 Anything that already tells an agent it got something wrong — a verifier, a

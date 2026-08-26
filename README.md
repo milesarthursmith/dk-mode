@@ -139,6 +139,55 @@ do is read the history that already exists:
 python3 .claude/vendor/dk-mode/scripts/dk_consolidate.py --drain
 ```
 
+## Trying it locally (OpenRouter, or any OpenAI-compatible endpoint)
+
+The two model-calling stages speak the OpenAI chat format when
+`DK_BACKEND=openai`, so OpenRouter works with nothing but a URL, a key and a
+model id. The two stages are separately configurable on purpose: **relevance
+runs on every turn and is a fast classification, consolidation runs
+occasionally and is a judgement call** — so pay for the second, not the first.
+
+```bash
+export DK_BACKEND=openai
+export DK_API_URL=https://openrouter.ai/api/v1/chat/completions
+export DK_KEY_FILE=~/.claude/secrets/openrouter_key   # or ANTHROPIC_API_KEY-style env
+export DK_WATCH_MODELS=openai/gpt-5.6-luna            # per-turn, cheap
+export DK_MODELS=openai/gpt-5.6-terra                 # weekly, better judgement
+```
+
+Check the current model list and prices at openrouter.ai/models before
+committing to an id — they change.
+
+**Smoke-test it in one command, without touching your real memory:**
+
+```bash
+bash tests/run_dk_tests.sh        # 85 tests, mocked models, no key needed
+```
+
+**Then prove the real endpoint works, on a scratch project:**
+
+```bash
+mkdir -p /tmp/dktest && ./install.sh --target /tmp/dktest --no-hooks
+CLAUDE_PROJECT_DIR=/tmp/dktest python3 scripts/dk_watch.py --capture-only \
+  ~/.claude/projects/<some-project>/<a-session>.jsonl
+cat /tmp/dktest/.claude/memory/dk.jsonl      # what it found in that session
+```
+
+If that prints entries, the endpoint, key and model are all good. If it
+prints nothing, look at `dk_watch.log` (under `~/Library/Logs` on a Mac) —
+every failure is recorded there with the reason.
+
+**Then mine for real and consolidate:**
+
+```bash
+./scripts/dk_backfill.sh --target ~/workspace     # reports found-by-reading vs phrase-match
+CLAUDE_PROJECT_DIR=~/workspace python3 scripts/dk_consolidate.py --drain
+```
+
+Cost control while experimenting: `DK_WATCH=0` turns the per-turn call off
+entirely, `DK_INTERVAL` controls how often consolidation runs, and
+`DK_BATCH` lowers how many entries go into each consolidation call.
+
 ## Configuration
 
 All optional, via environment variables (set them inline in the hook command
