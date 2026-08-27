@@ -379,8 +379,10 @@ JOB 1 - which rules are live RIGHT NOW. Not which are true in general: which \
 this situation is about to run into, from what the agent just said and what \
 the user just asked. Live means about to claim something is finished, about \
 to build something that may already exist, just gave a shallow answer. \
-Be strict. Most turns have NO live rule and an empty list is the normal, \
-correct answer. At most {max_active}.
+Select a rule when the situation is actually about to run into it. Do not \
+select one merely because it is true in general. There is no target rate: \
+say nothing when nothing applies, and speak whenever something does. At most \
+{max_active}.
 
 Optionally add one "alert": a single blunt present-tense sentence naming \
 what the agent is about to do wrong. Only if it is specific to THIS \

@@ -1,81 +1,104 @@
 # dk-mode
 
-Claude forgets your corrections when a conversation ends. dk-mode mines your
-old conversations. It finds the corrections that you make again and again.
-It writes them into a file. Then it shows the applicable correction to Claude
-at the moment when Claude can make the same mistake.
+Claude repeats mistakes. dk-mode holds a set of rules about how it goes wrong,
+and puts the applicable rule in front of Claude at the moment Claude is about
+to break it.
 
-The name is short for Dunning-Kruger. That is the problem. An agent is most
-sure of itself when it is wrong. Thus the agent does not examine its own
-record. A different program must do this.
+23 rules ship with it, so it works on the first day. Eleven of those come from
+published studies of how coding agents fail. Then it learns yours.
+
+The name is short for the Dunning-Kruger effect: a person is most confident
+when they are least competent. An agent behaves the same way. It is most sure
+of itself when it is wrong, so it never examines its own record. A different
+program must do that.
 
 This document uses Simplified Technical English (ASD-STE100).
 
 ## What dk-mode does
 
-dk-mode does three things.
+dk-mode does four things.
 
-**1. It mines your history.** Claude Code keeps each conversation in a file
-on your computer. A model reads these files. It finds each moment when you
-corrected Claude, and each moment when Claude corrected itself. The script
-then copies the words from the file. It also keeps the three messages before
-each correction, which show what the correction was about.
+**1. It knows how agents fail before it knows you.** 23 rules ship with it.
+Eleven come from measured studies - MAST, a study of 20,574 real coding-agent
+sessions, SWE-Bench Pro, reward-hacking benchmarks, SlopCodeBench - and each
+names its source. Most name the frequency the study measured. The other twelve
+come from building this project.
+
+**2. It mines your history.** Claude Code keeps each conversation in a file on
+your computer. A model reads these files. It finds each moment when you
+corrected Claude, and each moment when Claude corrected itself. dk-mode then
+copies those words from the file, with the three messages before each one.
 
 A word search does not do this work. dk-mode had one, and a measurement
 removed it: against a real conversation it found 0 of 46 corrections. People
 do not announce a correction. They redirect. "bit lame", "simplify" and "why
 is this so slow" are all corrections, and no word list finds them.
 
-dk-mode also ships 23 known agent failure modes, so it steers on the first
-day. Some come from published studies of how agents fail, and each of those
-names its source and the frequency the study measured. The others come from
-building this. They all carry `Source: baseline` and no evidence quote,
-because they did not come from you. Your own mined rules are better, and they
-replace these as they accumulate. Use `--no-baseline` at install to start
-empty.
+**3. It gives a reminder at the start of a turn.** After each turn, a model
+examines the conversation and decides which rules apply. dk-mode puts those
+rules into the next message that Claude reads.
 
-**2. It makes rules.** At an interval, a model reads the collected
-corrections. The model sorts them. It marks a repeated correction as a rule.
-It discards a single event. It writes the result into one file. You can read
-this file and change it.
+**4. It speaks during a turn.** One turn can run 25 tool calls over ten
+minutes. A second hook runs after every tool call and uses no model. It has
+three tripwires it can see without one: the same tool call three times, twelve
+reads with nothing written, and a test file changed after a test failed.
 
-**3. It gives a reminder.** After each turn, a model examines the
-conversation. The model selects the rules that apply now. Usually no rule
-applies, and dk-mode adds no text. When a rule applies, dk-mode puts that
-rule into the next message that Claude reads.
+Steps 3 and 4 are different from a rule in a configuration file, for two
+reasons.
 
-Step 3 is different from a rule in a configuration file, for two reasons.
+**Where the text goes.** dk-mode puts the rule at the end of everything Claude
+reads, next to your request, immediately before Claude answers. A rule in a
+configuration file sits at the start, often a hundred thousand tokens earlier.
+The same words in the two positions do not have the same effect. This is the
+more important reason. It is true on every turn.
 
-**Where the text goes.** dk-mode puts the rule at the end of everything
-Claude reads, next to your request, immediately before Claude answers. A rule
-in a configuration file sits at the start, often a hundred thousand tokens
-earlier. The same words in the two positions do not have the same effect.
+**When the text appears.** A permanent rule appears on every turn. dk-mode
+shows a rule at the moment it applies.
 
-**When the text appears.** A permanent rule appears on every turn, and a rule
-that appears on every turn is easy to ignore. dk-mode shows a rule at the
-moment it applies.
+## Where the rules come from
 
-The first reason is the more important one. It is true on every turn, and it
-does not depend on dk-mode choosing the correct rule.
+Four sources. Only the first is there on day one. You do no additional work
+for the other three.
 
-## What to call it
-
-dk-mode uses the names the research already uses. In one sentence: it is an
-**out-of-band runtime monitor** over the agent's work, with an **episodic
-memory** built from your past corrections, which injects a **critic's** note
-into the next prompt. `docs/MECHANISM.md` section 1.1 gives the name for each
-part, and section 1.2 gives three words this project does not use, and why.
-
-## The sources of the corrections
-
-dk-mode uses three sources. You do no additional work for these sources.
-
+- **Published research.** The 23 rules described above. They carry
+  `Source: baseline` and no evidence quote, because they did not come from
+  you. A rule built from your evidence must quote you, and these have nothing
+  to quote.
 - **You.** You correct Claude in your own words. dk-mode does not need a
   special format.
 - **Claude.** Claude corrects itself during a task. An example is "that did
-  not work". This source operates when you do not monitor the conversation.
-- **Your other programs.** A test gate, a review agent or a CI step sends an
-  event to `dk_signal.py`.
+  not work". This source operates when you do not watch the conversation.
+- **Your other programs.** A test gate, a review agent, a lint rule or a CI
+  step reports a correction directly with `scripts/dk_signal.py`. None of
+  these appear in a conversation.
+
+A rule mined from you is better than a supplied one, because it is about you.
+When there is not room for every rule, dk-mode keeps yours and drops the
+supplied ones. A supplied rule can also become an evidenced one: when your
+words match a rule that shipped, dk-mode attaches your quote to it.
+
+## What the monitor knows about the conversation
+
+The per-turn model reads the last two exchanges. That is a small part of a
+long conversation, so dk-mode also keeps a **brief**: a short record of what
+this conversation is for and where it has got to.
+
+```
+GOAL:        Build a CSV parser. Do not add any third-party dependencies.
+CONSTRAINTS: no third-party dependencies (stdlib only)
+DECIDED:     use the stdlib csv module
+OPEN:        implementation and test verification
+```
+
+The model writes the brief with the same call it already makes each turn, so
+the brief costs no extra call and no extra time. `GOAL` is different: dk-mode
+copies it from your first message and the model cannot change it. A brief
+written from the previous brief drifts, and after fifty turns the goal becomes
+something else. That is the failure the brief exists to prevent.
+
+Nine of the 23 rules need the brief. "Repeats a step already taken", "ignores
+a constraint that was stated", "solves a different problem" and "forgets a
+decision made earlier" are invisible in two exchanges.
 
 ## Install dk-mode
 
@@ -104,7 +127,7 @@ cd dk-mode
 ```
 
 `--global` installs dk-mode one time for every project on this computer. It
-puts the code and the memory under `~/.claude`, and the two hooks into
+puts the code and the memory under `~/.claude`, and the three hooks into
 `~/.claude/settings.json`. All projects then share one memory. This is
 correct for most people: a mistake that Claude makes is a fact about its
 behaviour, not about one repository.
@@ -118,7 +141,7 @@ To keep dk-mode in one project only, give a path instead:
 Then the memory and the hooks stay in that project. They operate only when
 you start Claude Code there.
 
-The installer makes the memory files and adds the two hooks. If your system
+The installer makes the memory files and adds the three hooks. If your system
 prevents a change to the settings file, the installer prints the necessary
 lines. Then you can add these lines manually. Use `--no-hooks` to prevent the
 change. Use `--update` to refresh the code later. It is safe to run the
@@ -141,8 +164,8 @@ export DK_BACKEND=cli
 This uses the login you already have. The token is in your operating system
 keychain, so it operates when you run a command yourself and it FAILS under
 cron, which has no login session and cannot open the keychain. Use a
-LaunchAgent for scheduled work, or use a key. Also do not select this for the
-per-turn hook: it starts a new `claude` process on every turn.
+LaunchAgent for scheduled work, or use a key. It adds one or two seconds
+per turn, after your turn ends, so you never wait for it.
 
 For the Anthropic API, set one variable:
 
@@ -166,7 +189,7 @@ address of the local server, for example
 `http://localhost:11434/v1/chat/completions`. A local server does not need a
 key.
 
-Put the same variables into the two hook commands in your settings file.
+Put the same variables into the three hook commands in your settings file.
 Then the hooks also have a model.
 
 ### 3. Mine your history
@@ -250,7 +273,6 @@ The per-turn call sends up to about 3,600 tokens and gets a few hundred back:
 | `DK_BACKEND=cli` | nothing | Uses the Claude login you already have. Slower, because it starts a process. |
 | Haiku 4.5 | about $16 | The cheapest Claude model. Strict enough. |
 | Sonnet 5 | about $31 | Better judgement than this job needs. |
-| A cheap open model through OpenRouter | about $4 | See the warning below. |
 
 Use `cli` unless you have a reason not to. It costs nothing and needs no key.
 
@@ -278,8 +300,9 @@ give it a better model: keep `DK_MODELS` at the default.
 | `DK_WATCH_TURNS` | `6` | Window size when mining history only. It does not affect live turns. |
 | `DK_TRIP_REPEATS` | `3` | How many identical tool calls in one turn before dk-mode says so, without using a model. |
 | `DK_TRIP_READS` | `12` | How many reads with nothing written before dk-mode says so. A write resets the count. |
-| `DK_MAX_RULES` | `40` | How many rules are described to the model each turn. Mined rules are kept over baseline ones when this bites. |
-| `DK_SCAN_LINES` | `150` | The quantity of the conversation to read. Set it to `0` to read all of it. |
+| `DK_BRIEF_CHARS` | `1200` | The size limit on the running brief. |
+| `DK_MAX_RULES` | `40` | How many rules are described to the model each turn. At the limit dk-mode drops baseline rules before mined ones. |
+| `DK_SCAN_LINES` | `150` | Set it to `0` to stop the live miner. `dk_backfill.sh` sets it to `0` while it reads history. It is not a line count. |
 
 ### The less usual settings
 
@@ -288,12 +311,13 @@ give it a better model: keep `DK_MODELS` at the default.
 | `DK_BATCH` | `200` | The quantity of corrections for one interval call. Decrease it for a small local model. |
 | `DK_REASONING_EFFORT` | — | Set it to `none` to stop the reasoning stage of a local model. |
 | `DK_WATCH_MAX_TOKENS` | `2000` | The maximum length of the reply to the per-turn call. A reasoning model needs a large value. |
-| `DK_TIMEOUT` | `180` / `600` | The number of seconds to wait. A local model is slower. |
-| `DK_LOG_DIR` | `~/Library/Logs` | The directory for the error logs. |
+| `DK_TIMEOUT` | `180` / `600` | Seconds to wait for the interval call. A local model is slower. |
+| `DK_WATCH_TIMEOUT` | `120` | Seconds to wait for the per-turn call. |
+| `DK_LOG_DIR` | `~/Library/Logs` on a Mac, else `~/.claude/logs` | The directory for the error logs. |
 | `--no-baseline` (install flag) | off | Start with no rules at all, instead of the 23 baseline failure modes. |
 | `DK_MEM` | — | The memory directory itself. The plugin sets it to its own data directory. It has priority over `DK_HOME`. |
 | `DK_HOME` | — | The directory that holds `.claude/memory`. `install.sh --global` sets it in the hooks. It has priority over the project. |
-| `DK_SESSION_ID` | — | Claude Code sets this variable. It keeps the reminders of one conversation separate from a different conversation. |
+| `DK_SESSION_ID` | — | `dk_capture.sh` sets this from the hook payload. It keeps the reminders of one conversation separate from a different conversation. |
 
 ## The files in your project
 
@@ -321,6 +345,12 @@ numbered list of the rules. It replies with numbers only. The text of the
 reminder comes from your file. The interval model must quote your words as
 evidence. dk-mode examines the new file before it replaces the old file.
 
+One exception, and it is deliberate. The per-turn model may add a single
+sentence of its own, up to 200 characters, that names what is about to go
+wrong in this conversation. That line is the only text dk-mode injects that
+you did not write. It is a judgement about messages in front of it, not a
+claim about the past, so it cannot fabricate something you said.
+
 dk-mode continues to operate after a failure. If a model does not reply, if a
 key is absent, or if a reply is incorrect, dk-mode shows a short fixed list.
 After three failures in sequence, dk-mode reports the failure in the
@@ -333,5 +363,8 @@ did not collect.
 ## More information
 
 - [docs/log.md](docs/log.md) — the development record and the measurements.
-- [docs/MECHANISM.md](docs/MECHANISM.md) — the internal design, with
-  diagrams.
+- [docs/MECHANISM.md](docs/MECHANISM.md) — the internal design.
+- [scripts/dk_eval.py](scripts/dk_eval.py) — measures whether the monitor
+  speaks at the right moments.
+- [evals/impossiblebench/](evals/impossiblebench/) — a public benchmark that
+  asks whether dk-mode reduces cheating.
