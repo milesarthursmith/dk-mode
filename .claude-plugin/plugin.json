@@ -1,11 +1,20 @@
 {
   "name": "dk-mode",
   "displayName": "dk-mode",
-  "description": "Mines your past conversations for the corrections you keep repeating, then reminds Claude at the moment it is about to repeat the mistake. Ships 23 researched agent failure modes so it steers on day one.",
+  "description": "Ships 23 known agent failure modes, eleven taken from published studies, so it works on the first day. Then it mines your own corrections from past conversations and puts the applicable rule in front of Claude at the moment it is about to break it.",
   "version": "0.2.0",
-  "author": { "name": "milesarthursmith" },
+  "author": {
+    "name": "milesarthursmith"
+  },
   "homepage": "https://github.com/milesarthursmith/dk-mode",
   "repository": "https://github.com/milesarthursmith/dk-mode",
   "license": "MIT",
-  "keywords": ["memory", "self-steering", "hooks", "failure-modes", "recall"]
+  "keywords": [
+    "memory",
+    "failure-modes",
+    "runtime-monitor",
+    "hooks",
+    "episodic-memory",
+    "recall"
+  ]
 }

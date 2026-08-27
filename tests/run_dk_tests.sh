@@ -539,7 +539,7 @@ hosted_kicked=$([ -f "$SB/kicked" ] && echo yes || echo no)
 if [ "$local_kicked" = "yes" ] && [ "$hosted_kicked" = "no" ]; then ok; else bad "local=$local_kicked hosted=$hosted_kicked"; fi
 
 # =============================================================================
-echo "== relevance layer (dk_watch) =="
+echo "== runtime monitor (dk_watch) =="
 
 run_watch() {  # run_watch <transcript> [extra env...]
   local tp="$1"; shift
@@ -785,11 +785,11 @@ runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
 stop_mock
 if [ "$(cat "$ACTIVEF")" = "PREVIOUS" ] && [ ! -s "$RAW" ]; then ok; else bad "active=$(cat "$ACTIVEF")"; fi
 
-t "73c. a failing relevance layer is announced, not silent"
+t "73c. a failing runtime monitor is announced, not silent"
 sandbox; echo k > "$KEYF"
 printf 'watch_consecutive_failed=3\n' > "$STATE"
 out=$(run_recall)
-if printf '%s' "$out" | grep -q "relevance layer has failed its last 3 runs"; then ok; else bad "out: $out"; fi
+if printf '%s' "$out" | grep -q "runtime monitor has failed its last 3 runs"; then ok; else bad "out: $out"; fi
 
 t "73d. an unparseable DK_INTERVAL falls back to the default, not to per-turn"
 sandbox; echo k > "$KEYF"

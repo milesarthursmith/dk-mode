@@ -1,11 +1,13 @@
 {
   "name": "dk-mode",
-  "owner": { "name": "milesarthursmith" },
+  "owner": {
+    "name": "milesarthursmith"
+  },
   "plugins": [
     {
       "name": "dk-mode",
       "source": "./",
-      "description": "Self-steering memory: mines your corrections from past conversations and injects the relevant ones at the moment they apply.",
+      "description": "Ships 23 known agent failure modes, then mines your own corrections from past conversations. Puts the applicable one in front of Claude at the moment it is about to break it.",
       "strict": true
     }
   ]
