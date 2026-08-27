@@ -9,3 +9,9 @@ __pycache__/
 .env
 *.log
 .DS_Store
+
+# Eval working state: the throwaway monitor memory an arms.py run seeds, and
+# the raw inspect logs (large). The distilled numbers ARE committed - in
+# evals/results.md and evals/results/<date>/ - so a run stays re-derivable.
+evals/impossiblebench/.dk_mem/
+evals/impossiblebench/logs/
