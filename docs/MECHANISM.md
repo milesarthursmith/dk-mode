@@ -24,19 +24,86 @@ exactly these meanings.
 
 ---
 
-## 2. What dk-mode does, in three sentences
+## 2. What dk-mode does
 
-Claude forgets your corrections when a conversation ends.
+dk-mode holds a set of rules about how Claude goes wrong. It puts the
+applicable rule in front of Claude at the moment Claude is about to break it.
 
-dk-mode reads your old conversations and finds the corrections you make again
-and again.
+The rules come from four places. Two are there on the first day. Two fill in
+as you work.
 
-Then it puts the correct one back in front of Claude, at the moment Claude is
-about to make the same mistake again.
+### 2.1 Published research (day one, 23 rules)
+
+dk-mode is not empty when you install it. It ships 23 known ways that coding
+agents fail. Eleven come from published studies, and each one names its source
+and how often that study measured it:
+
+| Source | What it measured | Examples of rules taken from it |
+|---|---|---|
+| MAST, from 1600+ annotated traces across 7 frameworks | 14 failure modes with frequencies | Step repetition (15.7%, the most common single mode). Unaware that the task is finished (12.4%). Ignores a stated constraint (11.8%). Forgets a decision made earlier. |
+| A study of 20,574 real coding-agent sessions | How agents fail their users | Hands back a partial job as though it is complete. Solves a different, easier problem. |
+| SWE-Bench Pro | Where models fail on hard tasks | Reads without reaching a decision (context overflow was 35.6% of one model's failures; endless file reading 17.0%). |
+| Reward-hacking benchmarks (EvilGenie, ImpossibleBench) | Whether models cheat the test | Makes the test pass instead of making the code correct. One analysis found 19.78% of top SWE-Bench "solved" cases were semantically wrong. |
+| SlopCodeBench | How code degrades over long tasks | Puts new logic into functions that already exist (80% of runs). Copies code instead of reusing it (89.8%). |
+
+The other twelve come from building this repository. They cover claiming a job
+is done without checking, reporting success when the failure was discarded,
+skimming, rebuilding what already exists, agreeing under pressure, writing a
+test that cannot fail, testing the parts and never the connections, assuming
+the platform you developed on, fixing one case and not the pattern, inventing
+a plausible detail, widening the job, and hiding the bad news.
+
+These rules carry `Source: baseline` and **no evidence line**. They did not
+come from you. A rule built from your evidence must quote you, and these have
+nothing to quote. dk-mode never presents them as something you said.
+
+Install with `--no-baseline` to start with none of them.
+
+### 2.2 Your corrections (mined from your history)
+
+dk-mode reads the conversations already on your computer and finds the moments
+you corrected Claude. Section 5 explains how.
+
+A rule mined from you is better than a supplied one, because it is about you.
+When there is not room for every rule, dk-mode keeps yours and drops the
+supplied ones.
+
+### 2.3 Claude correcting itself
+
+Claude also corrects itself in the middle of a task: the approach failed, it
+made a mistake, it must start again. The miner reports these too, with the
+source `self`.
+
+This is weaker evidence than your correction, and dk-mode treats it that way.
+But it works in conversations nobody watches, which is what lets dk-mode
+improve an agent that runs on its own.
+
+### 2.4 Your other programs
+
+Any program that tells an agent it is wrong can report that directly, with
+`dk_signal.py`:
+
+```bash
+dk_signal.py --kind verdict --source my-verifier \
+    --text "FIX: the page promises a calculator it does not contain"
+```
+
+A failing gate, a review agent, a lint rule that keeps firing, a test suite:
+each is a correction, and none of them appear in a conversation. These entries
+go into the same file, under the same lock, and become rules the same way. A
+gate that complains twice becomes a standing rule, exactly as your repeated
+correction does.
+
+### 2.5 Why all four
+
+A rule written by somebody else tells you how agents fail in general. A rule
+mined from your own history tells you how this agent fails **you**. The first
+is useful immediately. The second is more accurate. dk-mode starts with the
+first and moves toward the second as it learns.
 
 ---
 
-## 3. Why it does not use a tool
+## 3. Why it does not offer a tool
 
 Claude cannot decide to look up "times I was lazy" **before** it is lazy. To
 see your own mistake while you make it is the ability that has failed. A tool
@@ -234,7 +301,12 @@ It fails by writing a whole quotation that reads correctly and never happened.
 The sorter runs every 7 days by default. Change this with `DK_INTERVAL`.
 Recall starts it in the background when it is due.
 
-It reads the new entries in `dk.jsonl` and rewrites `dk_rules.md`. It:
+It reads the new entries in `dk.jsonl`. Those entries come from all three
+mined sources: you, Claude correcting itself, and your other programs through
+`dk_signal.py`. Each entry carries a `source` field, and the sorter weighs
+them differently - your words are the strongest evidence.
+
+It rewrites `dk_rules.md`. It:
 
 - joins repeated corrections into one rule, and increases its count;
 - files a standing instruction, or a durable fact, under its own heading;
@@ -278,8 +350,8 @@ You never wait for step 6. It happens after your turn ends.
 
 | File | What it is |
 |---|---|
-| `dk.jsonl` | Every mined correction, in your words. dk-mode only adds to it. Do not read it by hand: it grows without limit. |
-| `dk_rules.md` | The sorted rules, and the standing note. Read it. Change it. Delete a rule you disagree with. |
+| `dk.jsonl` | Every mined correction: yours, Claude's own, and any reported by `dk_signal.py`. dk-mode only adds to it. Do not read it by hand: it grows without limit. |
+| `dk_rules.md` | The rules: the 23 supplied ones and everything mined since. Read it. Change it. Delete a rule you disagree with. |
 | `.dk_active.<session>` | The live selection for one conversation. Rewritten every turn. It is per conversation, so one conversation's answer never appears in another. |
 | `.dk_state` | Timing, and counts of failures. |
 
