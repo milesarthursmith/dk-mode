@@ -1075,6 +1075,37 @@ out=$(printf '{"prompt":"x","session_id":"s"}' | \
 if printf '%s' "$out" | grep -q "self-steering"; then ok
 else bad "read the project dir, not DK_HOME; got: [$out]"; fi
 
+t "90. no GNU-only flags in any shell script (this suite only ever runs on Linux)"
+# The suite runs on Linux, so a GNU-only flag passes every test here and fails
+# on the user's Mac. It has happened twice: `stat -f` ordering, then `head -z`
+# and `sort -z` in the smoke test, which died immediately on macOS with
+# "head: invalid option -- z". Checking one command was not enough - this
+# checks the class.
+fails=""
+for f in "$SCRIPTS"/*.sh "$REPO/install.sh"; do
+  # Strip comments first: these flags are named in explanatory comments.
+  body=$(sed 's/#.*//' "$f")
+  printf '%s' "$body" | grep -qE '\b(head|tail|sort|uniq)\b[^|;]*-[a-zA-Z]*z' \
+    && fails="$fails $(basename "$f"):null-separated-flag"
+  printf '%s' "$body" | grep -qE '\bgrep\b[^|;]*-[a-zA-Z]*P' \
+    && fails="$fails $(basename "$f"):grep-P"
+  printf '%s' "$body" | grep -qE '\breadlink\b[^|;]*-[a-zA-Z]*f' \
+    && fails="$fails $(basename "$f"):readlink-f"
+  printf '%s' "$body" | grep -qE '\bdate\b[^|;]*-d ' \
+    && fails="$fails $(basename "$f"):date-d"
+  printf '%s' "$body" | grep -qE '\bsed\b[^|;]*-i[ ]' \
+    && fails="$fails $(basename "$f"):sed-i-gnu-form"
+  # stat must try the GNU form FIRST: on Linux `stat -f %m` does not fail, it
+  # prints filesystem info, so BSD-first ordering breaks silently.
+  if printf '%s' "$body" | grep -q 'stat -f %m'; then
+    printf '%s' "$body" | grep -q 'stat -c %Y' \
+      || fails="$fails $(basename "$f"):bsd-stat-without-gnu"
+    printf '%s' "$body" | grep -qE 'stat -c %Y[^|]*\|\|[^|]*stat -f %m' \
+      || fails="$fails $(basename "$f"):stat-wrong-order"
+  fi
+done
+if [ -z "$fails" ]; then ok; else bad "$fails"; fi
+
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
 [ "$FAIL" = "0" ] || exit 1

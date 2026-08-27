@@ -70,15 +70,32 @@ echo "  mining model    : ${DK_WATCH_MODELS:-(default)}"
 echo "  sorting model   : ${DK_MODELS:-(default)}"
 
 # --- 1. pick the N most recent conversations -------------------------------
-# Newest first by mtime, portable across GNU and BSD stat.
-mt() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; }
-while IFS= read -r -d '' f; do
-  printf '%s\t%s\0' "$(mt "$f")" "$f"
-done < <(find "$PROJECTS" -name '*.jsonl' -type f -size +2k -print0) \
-  | sort -zrn | head -z -n "$COUNT" | tr '\0' '\n' \
-  | while IFS=$'\t' read -r _ f; do
-      [ -n "$f" ] && cp "$f" "$FEED/$(basename "$f")"
-    done
+# Python, not a shell pipeline. The first version used `sort -z` and `head -z`,
+# which are GNU-only: on macOS `head` has no -z and the whole selection failed
+# with "invalid option -- z". Same class of portability bug as `stat -f`, which
+# this repo already had once. Python is a dependency anyway and behaves the
+# same on both systems.
+PROJECTS="$PROJECTS" FEED="$FEED" COUNT="$COUNT" python3 <<'PYPICK'
+import os, shutil
+
+src, dst = os.environ["PROJECTS"], os.environ["FEED"]
+count = int(os.environ["COUNT"])
+found = []
+for root, _dirs, files in os.walk(src):
+    for name in files:
+        if not name.endswith(".jsonl"):
+            continue
+        path = os.path.join(root, name)
+        try:
+            st = os.stat(path)
+        except OSError:
+            continue
+        if st.st_size > 2048:
+            found.append((st.st_mtime, path))
+found.sort(reverse=True)
+for _mtime, path in found[:count]:
+    shutil.copy2(path, os.path.join(dst, os.path.basename(path)))
+PYPICK
 
 picked=$(find "$FEED" -name '*.jsonl' | wc -l | tr -d ' ')
 if [ "$picked" = "0" ]; then
