@@ -263,6 +263,96 @@ def main_watched(out_path=None):
     return 0
 
 
+def main_scale(out_path=None):
+    """The test that separates selection from echoing.
+
+    Echoing works when there is one instruction to echo. A real session
+    accumulates hundreds - dk_rules.md only ever grows, which is why
+    DK_MAX_RULES exists - and at that size echoing is not a design anyone can
+    choose. It costs thousands of tokens every turn, and it buries the one
+    rule that matters inside a wall the model reads the way it reads a config
+    file: not at all.
+
+    So three arms, and the middle one is included to be shown impossible:
+      baseline   nothing.
+      echo-all   all 200 instructions, every turn. Cost is recorded.
+      dk-mode    picks at most three.
+
+    If echo-all is both expensive AND no better, selection is the only option
+    and the question becomes whether dk-mode selects well. If echo-all wins,
+    dk-mode is a costly way to do something a paste does better, and that is
+    the finding.
+    """
+    case = json.load(open(os.path.join(HERE, "scale_case.json")))
+    rules = W.load_rules()
+    inst = case["instructions"]
+    echo = "<reminder>\n" + "\n".join("! " + i for i in inst) + "\n</reminder>"
+    echo_tokens = len(echo) // 4
+
+    msgs = [("user", "Here are the project rules:\n" + "\n".join(inst)),
+            ("assistant", "Understood. I will follow all of them.")]
+    for i in range(case["filler_turns"]):
+        msgs.append(("user", "Unrelated: add logging to step %d." % i))
+        msgs.append(("assistant", "Done, step %d." % i))
+
+    brief = "GOAL: follow the project rules above while doing the work."
+    rows, dk_tokens = [], []
+    for bait in case["baits"]:
+        conv = msgs + [("user", bait["prompt"])]
+        rx = re.compile(bait["violation"], re.I)
+        base = ask_agent(conv, "")
+        allr = ask_agent(conv, echo)
+        inject, _ = steer_for(conv, rules, brief)
+        dk = ask_agent(conv, inject)
+        dk_tokens.append(len(inject) // 4)
+        row = {"id": bait["id"],
+               "base": bool(rx.search(base)) if base else None,
+               "echo": bool(rx.search(allr)) if allr else None,
+               "dk": bool(rx.search(dk)) if dk else None,
+               "dk_cost": len(inject) // 4}
+        rows.append(row)
+        f = lambda v: "BROKE" if v else ("held" if v is False else "?")
+        print("%-14s base %-6s echo-all %-6s dk %-6s   (dk cost %d tok)"
+              % (bait["id"], f(row["base"]), f(row["echo"]), f(row["dk"]),
+                 row["dk_cost"]))
+
+    ok = [r for r in rows if r["base"] is not None]
+    b = sum(1 for r in ok if r["base"])
+    e = sum(1 for r in ok if r["echo"])
+    d = sum(1 for r in ok if r["dk"])
+    avg_dk = sum(dk_tokens) // max(1, len(dk_tokens))
+    print("\n%d baits.  broken by: baseline %d, echo-all %d, dk-mode %d"
+          % (len(ok), b, e, d))
+    print("\nCOST PER TURN")
+    print("  echo-all : %5d tokens  (%d instructions, every turn, forever)"
+          % (echo_tokens, len(inst)))
+    print("  dk-mode  : %5d tokens injected, plus ~870 to choose from 40 rules"
+          % avg_dk)
+    print("  ratio    : echoing costs %.0fx what dk-mode injects"
+          % (echo_tokens / max(1, avg_dk)))
+    if b == 0:
+        print("\nBaseline broke nothing. The baits are too weak to conclude.")
+    elif d < e:
+        print("\ndk-mode broke fewer than echoing everything, at %.0fx less "
+              "cost.\nSelection beats volume here." % (echo_tokens / max(1, avg_dk)))
+    elif d == e:
+        print("\nSame outcome, but echoing costs %.0fx more per turn and grows "
+              "with every\nnew rule. Selection is the only one that scales."
+              % (echo_tokens / max(1, avg_dk)))
+    else:
+        print("\nEchoing everything did BETTER. dk-mode's selection is the "
+              "weak link.\nReport it that way.")
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as f2:
+            f2.write("# Selection vs echoing, at %d instructions\n\n"
+                     "echo-all costs %d tokens per turn; dk-mode injects ~%d.\n\n"
+                     % (len(inst), echo_tokens, avg_dk))
+            for r in rows:
+                f2.write("- **%s** base=%s echo-all=%s dk=%s\n"
+                         % (r["id"], r["base"], r["echo"], r["dk"]))
+    return 0
+
+
 def main():
     argv = sys.argv[1:]
     filler, out_path = 6, None
@@ -276,6 +366,8 @@ def main():
             else:
                 out_path = v
 
+    if "--scale" in argv:
+        return main_scale(out_path=out_path)
     if "--watched" in argv:
         return main_watched(out_path=out_path)
     if "--long" in argv:
