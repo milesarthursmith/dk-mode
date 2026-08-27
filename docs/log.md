@@ -19,6 +19,61 @@ version did and what measurement showed to be near useless (see 2026-08-25).
 
 ---
 
+## 2026-08-27 — first real end-to-end run, and a researched baseline
+
+**It ran.** Three real conversations, mined with `claude -p` against the
+existing login, no API key. 13 items found, 10 of them real. The two casual
+redirections it caught ("why is it talking aobut the skills?", "are you 100%
+sure?") are exactly what a phrase list cannot see, which is the thesis.
+
+Three false positives, all plain instructions or status updates reported as
+corrections. Both of the user's actual sentences are now named in the prompt
+as counter-examples, with the test stated: a correction changes how the agent
+is working; starting a task or agreeing to a plan does not.
+
+Unexpected win: the Facts section captured three reusable environment gotchas
+(no `setsid` on macOS, Ollama's 4096 `num_ctx` default, qwen3.5 needing
+`reasoning_effort: none`). That category was not designed for and earned its
+place.
+
+**A live API key was mined out of a transcript** and written to `dk.jsonl`,
+which is read into prompts and lives where people commit files. Credentials
+are now removed at the point of writing. Eager by design: a wrong removal
+costs one unreadable quote, a missed one writes a live key to disk.
+
+**Baseline rules added.** A new install seeds 23 known failure modes so
+dk-mode steers before it has mined anything. Twelve came from building this.
+Eleven came from published taxonomies, each citing its source and measured
+frequency:
+
+- MAST (1600+ annotated traces, 7 frameworks): step repetition 15.7%, the
+  most common single mode; unaware of termination conditions 12.4%; disobey
+  task specification 11.8%; loss of conversation history 2.8%.
+- Developer-agent misalignment across 20,574 real sessions: incomplete
+  solutions, incorrect problem interpretation. The same corpus reports users
+  pushing back in 44% of turns, which is the raw material this project mines.
+- SWE-Bench Pro: context overflow 35.6% of one model's failures, endless file
+  reading 17.0%.
+- Reward-hacking work (EvilGenie, ImpossibleBench): making the test pass
+  rather than the code right. An analysis of top SWE-Bench entries found
+  19.78% of "solved" cases semantically incorrect.
+- SlopCodeBench: complexity concentration rose in 80% of trajectories,
+  verbosity in 89.8%; agent code measured 2.2x more verbose than maintained
+  human repositories.
+
+Baseline items carry no Evidence line, deliberately. A rule built from the
+user's evidence must quote it; these have none, so they must never be
+mistakable for something the user said. Two tests enforce that, and that the
+loader can actually see every item — an item silently dropped is one that can
+never fire.
+
+One caution on the sources: an automated read of the MAST paper returned
+generic category labels that contradicted the named modes and percentages in
+the same search. The named ones were used. The numbers above are quoted so
+they can be checked, not because they are precise for any one agent.
+
+---
+
 ## 2026-08-26 — the phrase pass deleted, and three wiring bugs it hid
 
 Miles: "The regex test is not worth it." Correct, and it was worse than

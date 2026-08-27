@@ -1221,6 +1221,38 @@ if grep -q "(none captured yet)" "$PROJ/.claude/memory/dk_rules.md" \
    && ! grep -q "Source:\*\* baseline" "$PROJ/.claude/memory/dk_rules.md"; then ok
 else bad "baseline leaked into a --no-baseline install"; fi
 
+t "97. every baseline item is complete and none fabricates user evidence"
+# The baseline set is the one place rules exist without being mined, so it is
+# the one place fabricated provenance could creep in. It must never carry an
+# Evidence line, and every item needs a Reminder line or it can never steer.
+fails=""
+BASE="$REPO/templates/baseline_rules.md"
+n=$(grep -c '^### ' "$BASE")
+[ "$n" -ge 20 ] || fails="$fails only-$n-items"
+[ "$(grep -c '\*\*Evidence:\*\*' "$BASE")" = "0" ] || fails="$fails fabricated-evidence"
+# Anchored: the file's own header comment mentions the marker too.
+[ "$(grep -c '^\*\*Source:\*\* baseline' "$BASE")" = "$n" ] || fails="$fails unmarked-items"
+[ "$(grep -c '\*\*Reminder line:\*\*' "$BASE")" = "$n" ] || fails="$fails missing-reminder"
+[ "$(grep -c '\*\*What it looks like:\*\*' "$BASE")" = "$n" ] || fails="$fails missing-description"
+[ "$(grep -c '\*\*Status:\*\* approved' "$BASE")" = "$n" ] || fails="$fails not-approved"
+if [ -z "$fails" ]; then ok; else bad "$fails"; fi
+
+t "98. the whole baseline set is selectable by the relevance layer"
+# An item the loader silently drops is an item that can never fire. The count
+# the loader sees must match the count in the file.
+sandbox
+PROJ="$SB/proj3"; mkdir -p "$PROJ"
+(cd "$REPO" && DK_REPO_URL="file:///nope-$$" bash install.sh --target "$PROJ" --no-hooks >/dev/null 2>&1)
+infile=$(grep -c '^### ' "$PROJ/.claude/memory/dk_rules.md")
+loaded=$(CLAUDE_PROJECT_DIR="$PROJ" python3 -c "
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location('w', '$SCRIPTS/dk_watch.py')
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print(len(m.load_rules()))
+")
+if [ "$infile" = "$loaded" ]; then ok
+else bad "$infile items in the file but the loader sees $loaded"; fi
+
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
 [ "$FAIL" = "0" ] || exit 1
