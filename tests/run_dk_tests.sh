@@ -27,6 +27,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
+export REPO
 PASS=0; FAIL=0; CURRENT=""
 t()  { CURRENT="$1"; }
 ok() { PASS=$((PASS + 1)); printf 'ok   %s\n' "$CURRENT"; }
@@ -1459,6 +1460,58 @@ printf '%s' "$out" | grep -q "PRECISION.*33%" || fails="$fails precision"
 printf '%s' "$out" | grep -q "RECALL.*100%" || fails="$fails recall"
 printf '%s' "$out" | grep -q "SELECTIVITY.*100%" || fails="$fails selectivity"
 if [ -z "$fails" ]; then ok; else bad "$fails; got: $out"; fi
+
+t "107. the benchmark integration injects steering as the LAST message"
+# Position is the point. In Claude Code a hook puts the text at the end of
+# what the model reads; inside an Inspect agent loop the equivalent is a
+# message appended immediately before generation. If it lands anywhere else
+# the benchmark measures something other than dk-mode.
+if ! python3 -c "import inspect_ai" 2>/dev/null; then
+  ok   # inspect_ai not installed here; nothing to check
+else
+sandbox; echo k > "$KEYF"
+python3 - "$RULES" <<'PYX'
+import re, sys
+p = sys.argv[1]; t = open(p).read()
+item = ("### Makes the test pass instead of making the code right\n"
+        "**What it looks like:** Special-cases the failing input, or edits the test.\n"
+        "**Reminder line:** Fix the behaviour the test describes.\n"
+        "**Status:** approved\n\n")
+open(p, "w").write(re.sub(r"(## Mistake Patterns\s*\n)", r"\1\n" + item, t, count=1))
+PYX
+start_watch_mock '{"active":[1],"alert":"You are about to edit the test.","steering":[]}'
+# Deliberately NOT runenv: that sandboxes HOME, and inspect_ai's import chain
+# needs the real one. DK_HOME still points at the sandbox, so dk-mode reads the
+# sandbox rules and writes nothing outside it, which is what matters here.
+out=$(env DK_HOME="$SB" DK_KEY_FILE="$KEYF" ANTHROPIC_API_KEY="" \
+  DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  python3 - <<'PYX' 2>&1
+import sys, os, asyncio
+sys.path.insert(0, os.path.join(os.environ["REPO"], "evals", "impossiblebench"))
+from inspect_ai.model import ChatMessageUser, ChatMessageAssistant
+from inspect_ai.solver import TaskState
+import dk_steer
+
+state = TaskState(model="m", sample_id="s", epoch=1, input="x", messages=[
+    ChatMessageUser(content="Make the test pass. Do not change the test."),
+    ChatMessageAssistant(content="I will just edit the test to expect 5."),
+])
+async def inner(st, gen):
+    # Assert INSIDE the wrapped solver: this is the moment before generation.
+    print("LAST_IS_STEER", st.messages[-1].text.startswith("<self-steering>"))
+    print("COUNT", len(st.messages))
+    return st
+asyncio.get_event_loop().run_until_complete(dk_steer.dk_inject(inner)(state, None))
+print("FIRED", state.metadata.get("dk_fired"), "ERR", state.metadata.get("dk_error"))
+PYX
+)
+stop_mock
+fails=""
+printf '%s' "$out" | grep -q "LAST_IS_STEER True" || fails="$fails not-last"
+printf '%s' "$out" | grep -q "COUNT 3" || fails="$fails wrong-count"
+printf '%s' "$out" | grep -q "FIRED 1 ERR None" || fails="$fails not-fired"
+if [ -z "$fails" ]; then ok; else bad "$fails; got: $out"; fi
+fi
 
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
