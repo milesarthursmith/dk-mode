@@ -130,6 +130,24 @@ enter, and before Claude reads anything.
 message and the printed text together. Claude cannot skip the printed text,
 and it cannot forget to look for it.
 
+**Where the text lands is the point.** The hook attaches its output to your
+turn. The text therefore sits at the **end** of everything Claude reads,
+next to your request, immediately before Claude answers.
+
+Compare that with a rule in a `CLAUDE.md` file. That rule sits at the top,
+often a hundred thousand tokens earlier. The words can be identical. The
+effect is not: the model reads the last thing before it answers very
+differently from something it read at the start.
+
+This is the structural reason dk-mode is a hook and not a configuration file.
+It is true on every turn. It does not depend on the rule being well chosen,
+and it does not depend on how often dk-mode speaks.
+
+Selectivity is a separate benefit, and a smaller one. A rule that appears on
+every turn is easier to ignore than a rule that appears at the moment it
+applies. That is worth having. But position is the part that always
+applies.
+
 dk-mode registers one script on that hook: `dk_recall.sh`. Everything else in
 this repository exists to decide what that script prints.
 
@@ -179,9 +197,13 @@ Four parts:
 The last three lines are a copy from `dk_rules.md`. The model selected the
 rule by its number. It did not write those words.
 
-When nothing applies, Claude reads nothing. This is important. A rule that
-appears on every turn becomes background text, and Claude stops reading it. A
-rule that appears only when it applies stays a real interruption.
+When nothing applies, Claude reads nothing. This keeps the text sharp: a
+rule that appears on every turn is easier to ignore than one that appears at
+the moment it applies.
+
+This is a refinement, not the foundation. Section 4.1 explains the
+foundation. Even the standing note, which does appear on every turn, arrives
+at the end of the context, and that is most of the value.
 
 ### 4.4 The warnings
 
@@ -387,9 +409,10 @@ Leave `DK_MODELS` at its default.
 
 ## 10. What is not proven
 
-- **Nobody has measured how often a rule is selected.** "Most turns select
-  nothing" is the assumption the whole design rests on. It has never been
-  counted.
+- **Nobody has measured how often a rule is selected.** A high rate would
+  make dk-mode noisy and would waste the second benefit described in section
+  4.3. It would not remove the first one: the text still arrives at the end
+  of the context. This is worth measuring, and it has never been counted.
 - The first real run mined 13 items from 3 conversations. 10 were real
   corrections. 3 were ordinary instructions, read wrongly as corrections. The
   instructions to the model were then made stricter, and that change is not

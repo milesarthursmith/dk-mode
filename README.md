@@ -44,9 +44,19 @@ conversation. The model selects the rules that apply now. Usually no rule
 applies, and dk-mode adds no text. When a rule applies, dk-mode puts that
 rule into the next message that Claude reads.
 
-Step 3 is different from a rule in a configuration file. Claude sees a
-permanent rule at each turn and ignores it. Claude sees a dk-mode reminder
-only at the moment when the rule applies.
+Step 3 is different from a rule in a configuration file, for two reasons.
+
+**Where the text goes.** dk-mode puts the rule at the end of everything
+Claude reads, next to your request, immediately before Claude answers. A rule
+in a configuration file sits at the start, often a hundred thousand tokens
+earlier. The same words in the two positions do not have the same effect.
+
+**When the text appears.** A permanent rule appears on every turn, and a rule
+that appears on every turn is easy to ignore. dk-mode shows a rule at the
+moment it applies.
+
+The first reason is the more important one. It is true on every turn, and it
+does not depend on dk-mode choosing the correct rule.
 
 ## The sources of the corrections
 
