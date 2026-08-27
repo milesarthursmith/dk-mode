@@ -1005,6 +1005,43 @@ out=$(printf '{"prompt":"x","session_id":"freshsess"}' | runenv bash "$SCRIPTS/d
 if printf '%s' "$out" | grep -q "claim done without running it"; then ok
 else bad "alert lost with no approved rules; got: [$out]"; fi
 
+t "87. every harness marker is filtered, including the two lost when capture was deleted"
+# Found by the real-model smoke test, not by this suite: a deleted script took
+# two markers with it, and a live run mined a <local-command-stdout> line as
+# the user's own words - the exact misattribution this project was built after.
+sandbox; echo k > "$KEYF"
+python3 - "$SB/markers.jsonl" <<'PYX'
+import json, sys
+rows, i = [], 0
+for content in ("<command-name>/model</command-name>",
+                "<local-command-caveat>caveat</local-command-caveat>",
+                "<local-command-stdout>Set model to claude-sonnet-5</local-command-stdout>",
+                "<task-notification>agent done</task-notification>",
+                "<system-reminder>reminder</system-reminder>",
+                "<wake reason=\"external-event\">x</wake>",
+                "[SYSTEM NOTIFICATION] x",
+                "<untrusted_external_data>x</untrusted_external_data>",
+                "you didn't run the tests"):
+    rows.append({"type": "user", "uuid": "m%d" % i, "isSidechain": False,
+                 "timestamp": "2026-08-26T00:00:00Z",
+                 "message": {"role": "user", "content": content}})
+    i += 1
+open(sys.argv[1], "w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+PYX
+# The mock selects every id it is SHOWN, so anything filtered cannot be mined.
+start_watch_mock "ALL_USER"
+runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  python3 "$SCRIPTS/dk_watch.py" "$SB/markers.jsonl"
+stop_mock
+leaked=""
+for m in "command-name" "local-command-caveat" "local-command-stdout" \
+         "task-notification" "system-reminder" "wake reason" \
+         "SYSTEM NOTIFICATION" "untrusted_external_data"; do
+  grep -qF "$m" "$RAW" 2>/dev/null && leaked="$leaked $m"
+done
+if [ -z "$leaked" ] && grep -qF "you didn't run the tests" "$RAW"; then ok
+else bad "leaked:$leaked ; real correction present: $(grep -c "run the tests" "$RAW" 2>/dev/null)"; fi
+
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
 [ "$FAIL" = "0" ] || exit 1

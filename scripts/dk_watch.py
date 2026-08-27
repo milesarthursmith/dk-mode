@@ -234,8 +234,15 @@ def _read_messages(path):
         else:
             continue
         if not text.strip() or any(m in text for m in (
-                "<command-name>", "<local-command-caveat>", "<task-notification>",
-                "<system-reminder>", "<wake reason=", "[SYSTEM NOTIFICATION")):
+                # This list is now the ONLY filter. dk_capture.sh carried the
+                # full one and was deleted; two markers did not survive the
+                # move, and a real run mined
+                # "<local-command-stdout>Set model to ...</local-command-stdout>"
+                # as if the user had said it. Anything added here must stay here.
+                "<command-name>", "<local-command-caveat>",
+                "<local-command-stdout>", "<task-notification>",
+                "<system-reminder>", "<wake reason=", "[SYSTEM NOTIFICATION",
+                "<untrusted_external_data")):
             continue
         msgs.append({"uuid": e.get("uuid", ""), "role": e["type"],
                      "text": text.strip()[:1500],
