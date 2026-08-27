@@ -19,7 +19,7 @@
 #   bash scripts/dk_smoketest.sh --keep          # leave the scratch dir behind
 #
 # A model is required. Set one of:
-#   DK_API_KEY=...            or  DK_KEY_FILE=~/.claude/secrets/vault_lint_key
+#   DK_API_KEY=sk-...        or  DK_KEY_FILE=/path/to/a/file/holding/the/key
 #   DK_BACKEND=openai DK_API_URL=... DK_API_KEY=...      (OpenRouter)
 #   DK_BACKEND=openai DK_API_URL=http://localhost:11434/v1/chat/completions
 set -uo pipefail

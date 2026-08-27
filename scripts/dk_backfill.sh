@@ -28,7 +28,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TRANSCRIPTS="${HOME}/.claude/projects"
-TARGET="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+TARGET="${DK_HOME:-${CLAUDE_PROJECT_DIR:-$(pwd)}}"
 
 while [ $# -gt 0 ]; do
   case "$1" in

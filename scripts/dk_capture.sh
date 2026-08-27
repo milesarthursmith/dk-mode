@@ -33,7 +33,9 @@
 #                  to. dk_backfill.sh calls dk_watch.py --capture-only itself.
 set -euo pipefail
 
-ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+# DK_HOME wins over everything: a machine-wide install points every project
+# at one memory. Unset = per-project, as before.
+ROOT="${DK_HOME:-${CLAUDE_PROJECT_DIR:-$(pwd)}}"
 MEM="$ROOT/.claude/memory"
 SCAN_LINES="${DK_SCAN_LINES:-150}"
 

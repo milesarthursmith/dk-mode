@@ -43,7 +43,9 @@
 # human-readable heartbeat line per run but is never parsed for scheduling.
 set -euo pipefail
 
-ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+# DK_HOME wins over everything: a machine-wide install points every project
+# at one memory. Unset = per-project, as before.
+ROOT="${DK_HOME:-${CLAUDE_PROJECT_DIR:-$(pwd)}}"
 MEM="$ROOT/.claude/memory"
 RULES="$MEM/dk_rules.md"
 RAW="$MEM/dk.jsonl"

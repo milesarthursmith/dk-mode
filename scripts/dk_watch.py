@@ -57,7 +57,11 @@ def find_root(start):
     return os.getcwd()
 
 
-ROOT = os.environ.get("CLAUDE_PROJECT_DIR") or find_root(SCRIPT_DIR)
+# DK_HOME wins over everything: a machine-wide install (install.sh --global)
+# points every project at one memory, because a mistake Claude makes is about
+# how it behaves, not about which repo it is in. Unset = per-project, as before.
+ROOT = (os.environ.get("DK_HOME") or os.environ.get("CLAUDE_PROJECT_DIR")
+        or find_root(SCRIPT_DIR))
 MEM = os.path.join(ROOT, ".claude", "memory")
 RULES = os.path.join(MEM, "dk_rules.md")
 SESSION = (os.environ.get("DK_SESSION_ID", "") or "")[:16] or "nosession"

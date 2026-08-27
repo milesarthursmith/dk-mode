@@ -56,22 +56,34 @@ dk-mode uses three sources. You do no additional work for these sources.
 Do these four steps in this sequence. Step 2 is necessary before step 3. If
 you mine without a model, dk-mode finds almost nothing.
 
-### 1. Install the code into your project
+### 1. Install the code
 
 ```bash
 git clone https://github.com/milesarthursmith/dk-mode.git
 cd dk-mode
+./install.sh --global
+```
+
+`--global` installs dk-mode one time for every project on this computer. It
+puts the code and the memory under `~/.claude`, and the two hooks into
+`~/.claude/settings.json`. All projects then share one memory. This is
+correct for most people: a mistake that Claude makes is a fact about its
+behaviour, not about one repository.
+
+To keep dk-mode in one project only, give a path instead:
+
+```bash
 ./install.sh --target /path/to/your/project
 ```
 
-The installer copies the scripts into your project. It makes the memory
-files. It adds two hooks to your settings file. If your system prevents a
-change to the settings file, the installer prints the necessary lines. Then
-you can add these lines manually.
+Then the memory and the hooks stay in that project. They operate only when
+you start Claude Code there.
 
-Use `--no-hooks` to prevent the change to the settings file. Use `--update`
-to refresh the copy in your project. It is safe to run the installer again.
-The installer does not replace the memory files.
+The installer makes the memory files and adds the two hooks. If your system
+prevents a change to the settings file, the installer prints the necessary
+lines. Then you can add these lines manually. Use `--no-hooks` to prevent the
+change. Use `--update` to refresh the code later. It is safe to run the
+installer again: it does not replace the memory files.
 
 ### 2. Give dk-mode a model
 
@@ -110,8 +122,8 @@ Then the hooks also have a model.
 An empty file gives no reminders. This step reads your old conversations.
 
 ```bash
-./scripts/dk_backfill.sh --target /path/to/your/project
-python3 scripts/dk_consolidate.py --drain --target /path/to/your/project
+./scripts/dk_backfill.sh --target ~          # or --target /your/project
+python3 scripts/dk_consolidate.py --drain --target ~
 ```
 
 Read the output of the first command. If it found nothing, dk-mode did not
@@ -123,8 +135,8 @@ This step is necessary only with `DK_APPROVAL=1`. dk-mode holds each new rule
 back until you approve it.
 
 ```bash
-python3 scripts/dk_review.py --list --target /path/to/your/project
-python3 scripts/dk_review.py --approve 1 2 5 --target /path/to/your/project
+python3 scripts/dk_review.py --list --target ~
+python3 scripts/dk_review.py --approve 1 2 5 --target ~
 ```
 
 In Claude Code, the `/dk-review` command does the same steps.
@@ -195,6 +207,7 @@ and dk-mode operates with no key.
 | `DK_WATCH_MAX_TOKENS` | `2000` | The maximum length of the reply to the per-turn call. A reasoning model needs a large value. |
 | `DK_TIMEOUT` | `180` / `600` | The number of seconds to wait. A local model is slower. |
 | `DK_LOG_DIR` | `~/Library/Logs` | The directory for the error logs. |
+| `DK_HOME` | — | The directory that holds `.claude/memory`. `install.sh --global` sets it in the hooks. It has priority over the project. |
 | `DK_SESSION_ID` | — | Claude Code sets this variable. It keeps the reminders of one conversation separate from a different conversation. |
 
 ## The files in your project

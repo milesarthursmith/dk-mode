@@ -1042,6 +1042,39 @@ done
 if [ -z "$leaked" ] && grep -qF "you didn't run the tests" "$RAW"; then ok
 else bad "leaked:$leaked ; real correction present: $(grep -c "run the tests" "$RAW" 2>/dev/null)"; fi
 
+t "88. --global installs one memory for every project, not a per-project one"
+sandbox
+FAKEHOME="$SB/fakehome"; mkdir -p "$FAKEHOME"
+(cd "$REPO" && HOME="$FAKEHOME" DK_REPO_URL="file:///nope-$$" \
+   bash install.sh --global >/dev/null 2>&1)
+fails=""
+[ -f "$FAKEHOME/.claude/memory/dk_rules.md" ] || fails="$fails no-memory"
+[ -f "$FAKEHOME/.claude/vendor/dk-mode/scripts/dk_capture.sh" ] || fails="$fails no-vendor"
+# The script path must be absolute and the memory pinned: a global hook runs
+# with each project as cwd, so ${CLAUDE_PROJECT_DIR} would point at whatever
+# repo is open rather than at the single install.
+cmds=$(python3 -c "
+import json,sys
+d=json.load(open(sys.argv[1]))
+print('\n'.join(h['command'] for k in d['hooks'] for e in d['hooks'][k] for h in e['hooks']))
+" "$FAKEHOME/.claude/settings.json" 2>/dev/null)
+printf '%s' "$cmds" | grep -q "DK_HOME=" || fails="$fails no-dk-home"
+printf '%s' "$cmds" | grep -q 'CLAUDE_PROJECT_DIR' && fails="$fails leaks-project-dir"
+printf '%s' "$cmds" | grep -qF "$FAKEHOME/.claude/vendor" || fails="$fails not-absolute"
+if [ -z "$fails" ]; then ok; else bad "$fails; cmds: $cmds"; fi
+
+t "89. DK_HOME overrides the project when both are set"
+# The whole point of a global install: whatever repo is open, one memory.
+sandbox
+OTHER="$SB/other-project"; mkdir -p "$OTHER/.claude/memory"
+out=$(printf '{"prompt":"x","session_id":"s"}' | \
+  env DK_HOME="$SB" CLAUDE_PROJECT_DIR="$OTHER" HOME="$SB/home" \
+      bash "$SCRIPTS/dk_recall.sh")
+# $SB has a seeded rules file; $OTHER has an empty memory dir. Reading the
+# DK_HOME one is the pass condition.
+if printf '%s' "$out" | grep -q "self-steering"; then ok
+else bad "read the project dir, not DK_HOME; got: [$out]"; fi
+
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
 [ "$FAIL" = "0" ] || exit 1

@@ -15,8 +15,12 @@
 #      and still exits 0 - the bootstrap succeeded even if registration
 #      didn't. Verify the file actually changed; don't assume.
 #
-# Usage: install.sh [--target PROJECT_ROOT] [--update] [--no-hooks]
+# Usage: install.sh [--target PROJECT_ROOT | --global] [--update] [--no-hooks]
 #   --target   project to install into (default: $CLAUDE_PROJECT_DIR, else pwd)
+#   --global   install once for EVERY project on this machine: code and memory
+#              under ~/.claude, hooks in ~/.claude/settings.json. One shared
+#              memory, because a mistake Claude makes is about how it behaves,
+#              not about which repo it is in. This is the usual choice.
 #   --update   fetch + re-pin the vendor clone to the newest tag
 #   --no-hooks skip settings.json registration entirely and print the manual
 #              block instead (for environments where settings edits are
@@ -31,11 +35,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGET="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 UPDATE=0
 NO_HOOKS=0
+GLOBAL=0
 REPO_URL="${DK_REPO_URL:-https://github.com/milesarthursmith/dk-mode.git}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --target) TARGET="$2"; shift 2 ;;
+    --global) GLOBAL=1; TARGET="$HOME"; shift ;;
     --update) UPDATE=1; shift ;;
     --no-hooks) NO_HOOKS=1; shift ;;
     -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -106,8 +112,16 @@ if [ -d "$VENDOR/skills/dk-review" ]; then
 fi
 
 # --- 3. hook registration ---------------------------------------------------
-CAPTURE_CMD="bash \"\${CLAUDE_PROJECT_DIR}/.claude/vendor/dk-mode/scripts/dk_capture.sh\""
-RECALL_CMD="bash \"\${CLAUDE_PROJECT_DIR}/.claude/vendor/dk-mode/scripts/dk_recall.sh\""
+if [ "$GLOBAL" = "1" ]; then
+  # $HOME is expanded NOW, not left for the shell: the hook runs with the
+  # project as cwd, and ${CLAUDE_PROJECT_DIR} would point at whichever repo
+  # is open rather than at the one install. DK_HOME pins the memory too.
+  CAPTURE_CMD="DK_HOME=\"$HOME\" bash \"$HOME/.claude/vendor/dk-mode/scripts/dk_capture.sh\""
+  RECALL_CMD="DK_HOME=\"$HOME\" bash \"$HOME/.claude/vendor/dk-mode/scripts/dk_recall.sh\""
+else
+  CAPTURE_CMD="bash \"\${CLAUDE_PROJECT_DIR}/.claude/vendor/dk-mode/scripts/dk_capture.sh\""
+  RECALL_CMD="bash \"\${CLAUDE_PROJECT_DIR}/.claude/vendor/dk-mode/scripts/dk_recall.sh\""
+fi
 # JSON-escaped variants for the copy-pasteable manual block (the command
 # strings contain literal quotes, which must appear as \" inside JSON).
 CAPTURE_JSON="$(printf '%s' "$CAPTURE_CMD" | sed 's/"/\\"/g')"
@@ -176,7 +190,11 @@ PY
 fi
 
 # --- summary ----------------------------------------------------------------
-echo "dk-mode installed"
+if [ "$GLOBAL" = "1" ]; then
+  echo "dk-mode installed for EVERY project on this machine"
+else
+  echo "dk-mode installed for this project"
+fi
 echo "  vendor:   $VENDOR (pinned: ${pinned:-unknown})"
 echo "  memory:   $TARGET/.claude/memory (dk_rules.md seeded: $seeded)"
 if [ "$registered" = "yes" ]; then
