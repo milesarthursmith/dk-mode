@@ -1106,6 +1106,65 @@ for f in "$SCRIPTS"/*.sh "$REPO/install.sh"; do
 done
 if [ -z "$fails" ]; then ok; else bad "$fails"; fi
 
+# --- 91-93: DK_BACKEND=cli - use the existing claude login, no API key ------
+
+t "91. DK_BACKEND=cli mines with no API key at all"
+sandbox
+mkdir -p "$SB/bin"
+cat > "$SB/bin/claude" <<'STUB'
+#!/usr/bin/env bash
+cat >/dev/null   # consume the prompt on stdin
+echo '{"active":[],"alert":null,"steering":[{"id":"a-2","source":"self","kind":"self-correction"}]}'
+STUB
+chmod +x "$SB/bin/claude"
+env CLAUDE_PROJECT_DIR="$SB" HOME="$SB/home" DK_KEY_FILE="$SB/home/nokey" \
+    ANTHROPIC_API_KEY="" DK_API_KEY="" DK_BACKEND=cli PATH="$SB/bin:$PATH" \
+    python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_autonomous.jsonl"
+if grep -qF "I never ran the court gate" "$RAW" 2>/dev/null; then ok
+else bad "cli backend mined nothing; raw: $(cat "$RAW" 2>/dev/null)"; fi
+
+t "92. a 'not logged in' CLI failure is reported, not silently empty"
+sandbox
+mkdir -p "$SB/bin"
+cat > "$SB/bin/claude" <<'STUB'
+#!/usr/bin/env bash
+cat >/dev/null
+echo "Not logged in" >&2
+exit 1
+STUB
+chmod +x "$SB/bin/claude"
+env CLAUDE_PROJECT_DIR="$SB" HOME="$SB/home" DK_KEY_FILE="$SB/home/nokey" \
+    ANTHROPIC_API_KEY="" DK_API_KEY="" DK_BACKEND=cli PATH="$SB/bin:$PATH" \
+    DK_LOG_DIR="$SB/logs" \
+    python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_autonomous.jsonl"
+if grep -qi "not logged in" "$SB/logs/dk_watch.log" 2>/dev/null \
+   && grep -qi "keychain" "$SB/logs/dk_watch.log" 2>/dev/null; then ok
+else bad "failure not explained; log: $(cat "$SB/logs/dk_watch.log" 2>/dev/null)"; fi
+
+t "93. an HTTP 401 says so instead of looking like an empty history"
+sandbox; echo k > "$KEYF"
+python3 - "$TMPBASE/p401" <<'PYX' &
+import http.server, sys
+class H(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        self.rfile.read(int(self.headers.get("content-length", 0)))
+        body = b'{"error":{"message":"invalid x-api-key"}}'
+        self.send_response(401)
+        self.send_header("content-length", str(len(body)))
+        self.end_headers(); self.wfile.write(body)
+    def log_message(self, *a): pass
+s = http.server.HTTPServer(("127.0.0.1", 0), H)
+open(sys.argv[1], "w").write(str(s.server_address[1]))
+s.serve_forever()
+PYX
+MOCK_PID=$!
+for _ in $(seq 1 50); do [ -s "$TMPBASE/p401" ] && break; sleep 0.1; done
+runenv DK_LOG_DIR="$SB/logs" DK_API_URL="http://127.0.0.1:$(cat "$TMPBASE/p401")/v1/messages" \
+  python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_autonomous.jsonl"
+stop_mock
+if grep -q "HTTP 401" "$SB/logs/dk_watch.log" 2>/dev/null; then ok
+else bad "401 not surfaced; log: $(cat "$SB/logs/dk_watch.log" 2>/dev/null)"; fi
+
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
 [ "$FAIL" = "0" ] || exit 1

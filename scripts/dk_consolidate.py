@@ -310,11 +310,55 @@ fences.
 """
 
 
+LAST_ERROR = []
+
+
+def call_cli(prompt, models, timeout):
+    """DK_BACKEND=cli: shell out to the `claude` CLI instead of an API.
+
+    This uses the login you already have, so it needs no API key. The auth
+    token lives in the macOS login keychain, which means it works when run by
+    hand from a terminal and FAILS under cron, which has no login session
+    ("Not logged in"). A LaunchAgent works; cron does not.
+
+    Not recommended for the per-turn hook: that would start a nested `claude`
+    process on every turn of every conversation. It is the right choice for
+    mining history, for consolidation, and for the smoke test.
+    """
+    import subprocess
+    for model in models:
+        cmd = ["claude", "-p", "--model", model] if model else ["claude", "-p"]
+        try:
+            r = subprocess.run(cmd, input=prompt, capture_output=True,
+                               text=True, timeout=timeout)
+        except FileNotFoundError:
+            LAST_ERROR.append("the `claude` CLI is not on PATH")
+            return None
+        except subprocess.TimeoutExpired:
+            LAST_ERROR.append(f"{model}: `claude -p` timed out after {timeout}s")
+            continue
+        if r.returncode != 0:
+            err = (r.stderr or "").strip()[:300]
+            if "not logged in" in err.lower():
+                err += "  (run `claude` once to log in; cron cannot unlock the keychain)"
+            LAST_ERROR.append(f"{model}: `claude -p` exit {r.returncode}: {err}")
+            continue
+        if r.stdout.strip():
+            return r.stdout
+        LAST_ERROR.append(f"{model}: `claude -p` returned nothing")
+    return None
+
+
 def call_api(key, prompt):
     """One request per model until one answers. Two wire formats:
     Anthropic messages (default) and OpenAI-compatible chat/completions,
     which is what Ollama, LM Studio, llama.cpp and vLLM all serve - so
     DK_BACKEND=openai + DK_API_URL is how you keep this stage local."""
+    if BACKEND == "cli":
+        out = call_cli(prompt, MODELS or [""], LOCAL_TIMEOUT)
+        if out:
+            return out, "claude-cli"
+        raise RuntimeError("; ".join(LAST_ERROR) or "`claude -p` produced nothing")
     last_err = None
     for model in MODELS:
         if BACKEND == "openai":
@@ -556,9 +600,12 @@ def main():
     key = read_key()
     # A local OpenAI-compatible server (Ollama/LM Studio/llama.cpp) needs no
     # key; only the hosted path requires one.
-    if not key and BACKEND != "openai":
-        note("no API key (set DK_API_KEY or DK_KEY_FILE, or set "
-             "DK_BACKEND=openai for a local server) - nothing to do")
+    # Neither a local OpenAI-compatible server nor the `claude` CLI needs a
+    # key: the CLI uses the login you already have.
+    if not key and BACKEND not in ("openai", "cli"):
+        note("no API key. Set DK_API_KEY or DK_KEY_FILE, or set "
+             "DK_BACKEND=cli to use your existing `claude` login, or "
+             "DK_BACKEND=openai for a local server - nothing to do")
         sys.exit(0)
     if not take_lock():
         note("another consolidation holds the lock - skipped")

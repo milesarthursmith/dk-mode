@@ -97,6 +97,9 @@ MAX_ACTIVE = 3
 
 ITEM_RE = re.compile(r"^### .*?(?=^### |^## |\Z)", re.M | re.S)
 
+# Why the model calls failed, in order. Empty means they did not fail.
+LAST_ERROR = []
+
 
 def log(msg):
     """The watcher used to fail in total silence: nine return-0 paths, no
@@ -310,7 +313,45 @@ Reply with ONLY a JSON object, no prose, no code fences:
 """
 
 
+
+def call_cli(prompt, models, timeout):
+    """DK_BACKEND=cli: shell out to the `claude` CLI instead of an API.
+
+    This uses the login you already have, so it needs no API key. The auth
+    token lives in the macOS login keychain, which means it works when run by
+    hand from a terminal and FAILS under cron, which has no login session
+    ("Not logged in"). A LaunchAgent works; cron does not.
+
+    Not recommended for the per-turn hook: that would start a nested `claude`
+    process on every turn of every conversation. It is the right choice for
+    mining history, for consolidation, and for the smoke test.
+    """
+    import subprocess
+    for model in models:
+        cmd = ["claude", "-p", "--model", model] if model else ["claude", "-p"]
+        try:
+            r = subprocess.run(cmd, input=prompt, capture_output=True,
+                               text=True, timeout=timeout)
+        except FileNotFoundError:
+            LAST_ERROR.append("the `claude` CLI is not on PATH")
+            return None
+        except subprocess.TimeoutExpired:
+            LAST_ERROR.append(f"{model}: `claude -p` timed out after {timeout}s")
+            continue
+        if r.returncode != 0:
+            err = (r.stderr or "").strip()[:300]
+            if "not logged in" in err.lower():
+                err += "  (run `claude` once to log in; cron cannot unlock the keychain)"
+            LAST_ERROR.append(f"{model}: `claude -p` exit {r.returncode}: {err}")
+            continue
+        if r.stdout.strip():
+            return r.stdout
+        LAST_ERROR.append(f"{model}: `claude -p` returned nothing")
+    return None
+
 def call_model(key, prompt):
+    if BACKEND == "cli":
+        return call_cli(prompt, WATCH_MODELS or [""], TIMEOUT)
     for model in WATCH_MODELS:
         if BACKEND == "openai":
             body = {"model": model, "max_tokens": MAX_TOKENS, "temperature": 0,
@@ -339,8 +380,20 @@ def call_model(key, prompt):
                                if isinstance(b, dict) and b.get("type") == "text")
             if text.strip():
                 return text
-        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError,
-                OSError, ValueError):
+        except urllib.error.HTTPError as e:
+            # 401 and 404 are configuration errors, not transient ones, and
+            # they used to be swallowed here: the run reported "found nothing",
+            # which reads as "your history is clean". An auth rejection is not
+            # an empty result.
+            detail = ""
+            try:
+                detail = e.read().decode("utf-8", "replace")[:300]
+            except Exception:
+                pass
+            LAST_ERROR.append(f"{model}: HTTP {e.code} {e.reason} {detail}".strip())
+            continue
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
+            LAST_ERROR.append(f"{model}: {type(e).__name__}: {e}"[:300])
             continue
     return None
 
@@ -501,7 +554,8 @@ def main():
     if not transcript or not os.path.isfile(transcript) or not os.path.isdir(MEM):
         return 0
     key = read_key()
-    if not key and BACKEND != "openai":
+    # Neither a local server nor the `claude` CLI needs a key.
+    if not key and BACKEND not in ("openai", "cli"):
         return 0                       # hosted backend with no key: no-op
     try:
         os.mkdir(LOCK)                 # one watcher at a time; no waiting
@@ -548,9 +602,11 @@ def main():
             convo="\n\n".join(
                 f'[{m["role"]} id={m["uuid"]}] {m["text"]}' for m in convo)))
         if not text:
-            mark(False, "no usable content from any model "
-                        f"({','.join(WATCH_MODELS)} at {API_URL}) - a thinking "
-                        "model with too small a token budget returns empty")
+            why = "; ".join(LAST_ERROR) if LAST_ERROR else (
+                "every model returned empty content - a thinking model with "
+                "too small a token budget does this")
+            mark(False, f"no usable content from any model "
+                        f"({','.join(WATCH_MODELS)} at {API_URL}): {why}")
             return 0
         parsed = parse_selection(text, rules)
         if parsed is None:

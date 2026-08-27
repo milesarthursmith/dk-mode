@@ -154,6 +154,8 @@ key_available() {
   # A local OpenAI-compatible backend (Ollama/LM Studio/llama.cpp) needs no
   # key, so the kick is gated on the backend instead.
   [ "${DK_BACKEND:-anthropic}" = "openai" ] && return 0
+  # The `claude` CLI authenticates with the login you already have.
+  [ "${DK_BACKEND:-anthropic}" = "cli" ] && return 0
   [ -n "${DK_API_KEY:-}" ] && return 0
   [ -n "${ANTHROPIC_API_KEY:-}" ] && return 0   # legacy name, still honoured
   [ -n "${DK_KEY_FILE:-}" ] && [ -f "$DK_KEY_FILE" ] && return 0

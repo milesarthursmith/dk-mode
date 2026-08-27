@@ -56,11 +56,37 @@ if [ ! -d "$PROJECTS" ]; then
 fi
 if [ -z "${DK_API_KEY:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ] \
    && { [ -z "${DK_KEY_FILE:-}" ] || [ ! -f "${DK_KEY_FILE/#\~/$HOME}" ]; } \
-   && [ "${DK_BACKEND:-anthropic}" != "openai" ]; then
+   && [ "${DK_BACKEND:-anthropic}" != "openai" ] \
+   && [ "${DK_BACKEND:-anthropic}" != "cli" ]; then
   echo "No model configured. This test is meaningless without one." >&2
-  echo "Set DK_API_KEY, or DK_KEY_FILE, or DK_BACKEND=openai + DK_API_URL." >&2
+  echo >&2
+  echo "Simplest option - use the Claude login you already have:" >&2
+  echo "    DK_BACKEND=cli bash scripts/dk_smoketest.sh" >&2
+  echo >&2
+  echo "Or set DK_API_KEY, or DK_KEY_FILE, or DK_BACKEND=openai + DK_API_URL." >&2
   exit 1
 fi
+if [ "${DK_BACKEND:-}" = "cli" ] && ! command -v claude >/dev/null 2>&1; then
+  echo "DK_BACKEND=cli needs the \`claude\` CLI on PATH, and it is not." >&2
+  exit 1
+fi
+
+KEY_INLINE="${DK_API_KEY:-${ANTHROPIC_API_KEY:-}}"
+case "$KEY_INLINE" in
+  *YOUR*|*your-key*|*xxx*|*XXX*|*REPLACE*|*PLACEHOLDER*|"sk-ant-..."|"sk-...")
+    echo "That key is a placeholder, not a key: $KEY_INLINE" >&2
+    echo "Every model call would be rejected, and this test would report" >&2
+    echo "'found nothing', which reads like your history is clean." >&2
+    exit 1 ;;
+esac
+if [ -n "$KEY_INLINE" ] && [ "${#KEY_INLINE}" -lt 20 ]; then
+  echo "That key is only ${#KEY_INLINE} characters - it looks truncated." >&2
+  exit 1
+fi
+
+# Keep the miner's log inside the scratch dir so this script can always find
+# it and show the real reason when nothing is mined.
+export DK_LOG_DIR="$SCRATCH/logs"
 
 echo "dk-mode end-to-end test"
 echo "  scratch project : $PROJ"
@@ -126,8 +152,26 @@ found=$(wc -l < "$RAW" 2>/dev/null | tr -d ' ' || echo 0)
 
 hr; echo "3. What it found ($found item(s)) - YOUR words, copied verbatim:"
 if [ "$found" = "0" ]; then
-  echo "   NOTHING. Either the model was unreachable (see the warning above),"
-  echo "   or these conversations genuinely contain no corrections."
+  echo "   NOTHING was mined. The miner reported:"
+  echo
+  if [ -s "$DK_LOG_DIR/dk_watch.log" ]; then
+    sed 's/^/     /' "$DK_LOG_DIR/dk_watch.log" | tail -12
+    echo
+    if grep -q "HTTP 401\|HTTP 403" "$DK_LOG_DIR/dk_watch.log"; then
+      echo "   That is an AUTHENTICATION failure, not an empty history."
+      echo "   The key was rejected. Check DK_API_KEY / DK_KEY_FILE."
+    elif grep -q "HTTP 404" "$DK_LOG_DIR/dk_watch.log"; then
+      echo "   That is a WRONG ADDRESS or unknown model name, not an empty"
+      echo "   history. Check DK_API_URL and DK_MODELS / DK_WATCH_MODELS."
+    elif grep -q "HTTP\|Error" "$DK_LOG_DIR/dk_watch.log"; then
+      echo "   The model could not be reached. That is not an empty history."
+    else
+      echo "   No error was reported, so the model was reached and judged"
+      echo "   these conversations to contain no corrections."
+    fi
+  else
+    echo "     (the miner wrote no log at all - it may not have started)"
+  fi
 else
   python3 - "$RAW" <<'PY'
 import json, sys

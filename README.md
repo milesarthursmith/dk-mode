@@ -92,6 +92,19 @@ dk-mode makes two different model calls. Set them separately.
 - The **per-turn call** does a quick selection. Use a cheap model.
 - The **interval call** makes a judgement. Use a better model.
 
+**The simplest option uses no key at all.** If you have the `claude` CLI and
+you are logged in, dk-mode can call it:
+
+```bash
+export DK_BACKEND=cli
+```
+
+This uses the login you already have. The token is in your operating system
+keychain, so it operates when you run a command yourself and it FAILS under
+cron, which has no login session and cannot open the keychain. Use a
+LaunchAgent for scheduled work, or use a key. Also do not select this for the
+per-turn hook: it starts a new `claude` process on every turn.
+
 For the Anthropic API, set one variable:
 
 ```bash
@@ -179,7 +192,7 @@ almost any model.
 |---|---|---|
 | `DK_API_KEY` | — | The key for the model calls, for any vendor. `ANTHROPIC_API_KEY` also operates, for an older installation. |
 | `DK_KEY_FILE` | — | A file that contains the key. Use this instead of `DK_API_KEY`. If you set neither one, the model stages do nothing and say so. |
-| `DK_BACKEND` | `anthropic` | The request format. Set it to `openai` for OpenRouter, Ollama, LM Studio, llama.cpp or vLLM. |
+| `DK_BACKEND` | `anthropic` | The request format. Set it to `openai` for OpenRouter, Ollama, LM Studio, llama.cpp or vLLM. Set it to `cli` to call the `claude` command with your existing login and no key. |
 | `DK_API_URL` | the Anthropic API | The address for the requests. Set it to the address of your server. |
 | `DK_MODELS` | Fable, then Opus | The models for the interval call. Use a comma between the names. dk-mode tries them in sequence. |
 | `DK_WATCH_MODELS` | Haiku | The model for the per-turn call. Use a cheap model. |
