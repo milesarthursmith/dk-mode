@@ -17,6 +17,10 @@
 #
 # Usage: install.sh [--target PROJECT_ROOT | --global] [--update] [--no-hooks]
 #   --target   project to install into (default: $CLAUDE_PROJECT_DIR, else pwd)
+#   --no-baseline  do not seed the well-known agent failure modes. By default
+#              a new install starts with templates/baseline_rules.md, marked
+#              "Source: baseline" so they are never confused with anything you
+#              said, so dk-mode is useful before it has mined anything.
 #   --global   install once for EVERY project on this machine: code and memory
 #              under ~/.claude, hooks in ~/.claude/settings.json. One shared
 #              memory, because a mistake Claude makes is about how it behaves,
@@ -36,12 +40,14 @@ TARGET="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 UPDATE=0
 NO_HOOKS=0
 GLOBAL=0
+NO_BASELINE=0
 REPO_URL="${DK_REPO_URL:-https://github.com/milesarthursmith/dk-mode.git}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --target) TARGET="$2"; shift 2 ;;
     --global) GLOBAL=1; TARGET="$HOME"; shift ;;
+    --no-baseline) NO_BASELINE=1; shift ;;
     --update) UPDATE=1; shift ;;
     --no-hooks) NO_HOOKS=1; shift ;;
     -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -101,6 +107,38 @@ if [ ! -f "$RULES" ]; then
   sed "s/^last_verified:.*$/last_verified: $(date +%F)/" \
     "$VENDOR/templates/dk_rules.md" > "$RULES"
   seeded=yes
+  # Seed the well-known agent failure modes so a new install steers before it
+  # has mined anything. They carry "Source: baseline" and no Evidence line,
+  # because they are not from this user - inventing provenance is the one
+  # thing this repo will not do.
+  if [ "$NO_BASELINE" = "0" ] && [ -f "$VENDOR/templates/baseline_rules.md" ]; then
+    RULES="$RULES" BASE="$VENDOR/templates/baseline_rules.md" python3 <<'PYSEED'
+import os, re
+
+rules_path, base_path = os.environ["RULES"], os.environ["BASE"]
+rules = open(rules_path, encoding="utf-8").read()
+base = open(base_path, encoding="utf-8").read()
+
+items = re.findall(r"^### .*?(?=^### |\Z)", base, re.M | re.S)
+body = "\n".join(i.rstrip() + "\n" for i in items)
+rules = rules.replace("## Mistake Patterns\n\n(none captured yet)",
+                      "## Mistake Patterns\n\n" + body, 1)
+
+# Pre-render the inject block. Without this a fresh install prints
+# "(nothing captured yet)" until the first consolidation runs.
+lines = [re.search(r"\*\*Reminder line:\*\* (.+)", i).group(1).strip()
+         for i in items if re.search(r"\*\*Reminder line:\*\* ", i)]
+note = ("<self-steering>\nSelf-steering - check before acting:\n"
+        + "\n".join("- " + l for l in lines[:5])
+        + "\n(baseline defaults; they are replaced as your own are mined)\n"
+          "</self-steering>")
+rules = re.sub(r"<!-- inject:start -->.*?<!-- inject:end -->",
+               "<!-- inject:start -->\n" + note + "\n<!-- inject:end -->",
+               rules, count=1, flags=re.S)
+open(rules_path, "w", encoding="utf-8").write(rules)
+PYSEED
+    seeded="yes + baseline failure modes"
+  fi
 fi
 [ -f "$TARGET/.claude/memory/dk.jsonl" ] || : > "$TARGET/.claude/memory/dk.jsonl"
 

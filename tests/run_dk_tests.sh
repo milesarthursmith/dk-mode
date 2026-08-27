@@ -1165,6 +1165,62 @@ stop_mock
 if grep -q "HTTP 401" "$SB/logs/dk_watch.log" 2>/dev/null; then ok
 else bad "401 not surfaced; log: $(cat "$SB/logs/dk_watch.log" 2>/dev/null)"; fi
 
+t "94. credentials in a transcript are redacted before they reach the log"
+# A real run mined a live OpenRouter key out of a conversation. dk.jsonl is
+# read into prompts and lives where people commit files, so redaction happens
+# where it is written.
+sandbox; echo k > "$KEYF"
+python3 - "$SB/secrets.jsonl" <<'PYX'
+import json, sys
+rows = [
+ {"type": "assistant", "uuid": "s0", "isSidechain": False,
+  "timestamp": "2026-08-26T00:00:00Z",
+  "message": {"role": "assistant", "content": "I will use the key you gave me."}},
+ {"type": "user", "uuid": "s1", "isSidechain": False,
+  "timestamp": "2026-08-26T00:01:00Z",
+  "message": {"role": "user", "content":
+    "no that's wrong. openrouter key sk-or-v1-" + "a"*48 +
+    " and sk-ant-api03-" + "b"*40 + " and ghp_" + "c"*30}},
+]
+open(sys.argv[1], "w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+PYX
+start_watch_mock "ALL_USER"
+runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+  python3 "$SCRIPTS/dk_watch.py" "$SB/secrets.jsonl"
+stop_mock
+fails=""
+grep -q "sk-or-v1-aaaa" "$RAW" 2>/dev/null && fails="$fails openrouter-key"
+grep -q "sk-ant-api03-bbbb" "$RAW" 2>/dev/null && fails="$fails anthropic-key"
+grep -q "ghp_cccc" "$RAW" 2>/dev/null && fails="$fails github-token"
+grep -q "REDACTED-SECRET" "$RAW" 2>/dev/null || fails="$fails no-redaction-marker"
+grep -qF "no that's wrong" "$RAW" 2>/dev/null || fails="$fails lost-the-correction"
+if [ -z "$fails" ]; then ok; else bad "$fails; raw: $(head -c 400 "$RAW" 2>/dev/null)"; fi
+
+t "95. a fresh install ships baseline failure modes and injects them immediately"
+sandbox
+PROJ="$SB/proj"; mkdir -p "$PROJ"
+(cd "$REPO" && DK_REPO_URL="file:///nope-$$" bash install.sh --target "$PROJ" --no-hooks >/dev/null 2>&1)
+out=$(printf '{"prompt":"x","session_id":"s"}' | \
+  env CLAUDE_PROJECT_DIR="$PROJ" HOME="$SB/home" bash "$SCRIPTS/dk_recall.sh")
+fails=""
+printf '%s' "$out" | grep -q "nothing captured yet" && fails="$fails empty-note"
+printf '%s' "$out" | grep -q "ran it this turn" || fails="$fails no-baseline-in-note"
+# Baseline items must never look like the user's own evidence.
+grep -q '\*\*Source:\*\* baseline' "$PROJ/.claude/memory/dk_rules.md" \
+  || fails="$fails unmarked"
+grep -A6 '^### Claims something is done' "$PROJ/.claude/memory/dk_rules.md" \
+  | grep -q '\*\*Evidence:\*\*' && fails="$fails fabricated-evidence"
+if [ -z "$fails" ]; then ok; else bad "$fails; note: $out"; fi
+
+t "96. --no-baseline leaves a genuinely empty install"
+sandbox
+PROJ="$SB/proj2"; mkdir -p "$PROJ"
+(cd "$REPO" && DK_REPO_URL="file:///nope-$$" bash install.sh --target "$PROJ" \
+   --no-hooks --no-baseline >/dev/null 2>&1)
+if grep -q "(none captured yet)" "$PROJ/.claude/memory/dk_rules.md" \
+   && ! grep -q "Source:\*\* baseline" "$PROJ/.claude/memory/dk_rules.md"; then ok
+else bad "baseline leaked into a --no-baseline install"; fi
+
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
 [ "$FAIL" = "0" ] || exit 1

@@ -291,7 +291,14 @@ all count. Report the message id and a kind.
 Do NOT report: ordinary new requests, questions, approvals, or the user \
 simply moving on to the next task. A question that implies the work is \
 wrong ("why is this so slow?") IS steering; a question seeking information \
-is not.
+is not. Be strict about this - a real run reported "basically find any \
+sessions and then find all the rules" and "yeah do that, start running" as \
+corrections. Both are plain instructions and neither belongs here. The test \
+is whether the user is CHANGING something about how you are working. \
+Starting a task, agreeing to a plan, or adding a requirement is not a \
+correction. Nor is your own status update, plan change, or note that an \
+external service needs attention - a self-correction is an admission that \
+something you did or claimed was WRONG.
 
 Also report any [assistant] message where the AGENT corrected ITSELF - said \
 its own approach was wrong, that something did not work, that it had made a \
@@ -398,6 +405,44 @@ def call_model(key, prompt):
     return None
 
 
+
+# Secrets must never reach dk.jsonl. A real run mined an OpenRouter key out of
+# a transcript, because people paste keys into chats and this reads chats
+# verbatim. The file is fed into prompts and sits in a directory people commit,
+# so redaction happens at the point of writing, not at the point of reading.
+SECRET_RE = re.compile(
+    r"""(
+        sk-ant-[A-Za-z0-9_\-]{16,}          # Anthropic
+      | sk-or-v1-[A-Za-z0-9]{16,}           # OpenRouter
+      | sk-proj-[A-Za-z0-9_\-]{16,}         # OpenAI project
+      | sk-[A-Za-z0-9]{32,}                 # generic OpenAI-style
+      | gh[pousr]_[A-Za-z0-9]{16,}          # GitHub
+      | github_pat_[A-Za-z0-9_]{20,}
+      | xox[abprs]-[A-Za-z0-9\-]{10,}       # Slack
+      | AKIA[0-9A-Z]{16}                    # AWS access key id
+      | AIza[0-9A-Za-z_\-]{30,}             # Google
+      | ya29\.[0-9A-Za-z_\-]{20,}           # Google OAuth
+      | eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}  # JWT
+      | -----BEGIN[ A-Z]*PRIVATE KEY-----
+    )""", re.X)
+
+# A key named in passing: "api key: <40 chars of hex>", "token=<blob>".
+LABELLED_SECRET_RE = re.compile(
+    r"""((?:api[_ -]?key|apikey|secret|token|password|passwd|bearer)
+         \s*[:=]?\s*['"]?)
+        ([A-Za-z0-9/+_\-]{24,})""", re.X | re.I)
+
+
+def redact(text):
+    """Replace anything that looks like a credential. Deliberately eager: a
+    false positive costs one unreadable quote, a false negative writes a live
+    key to disk and then into a prompt."""
+    if not text:
+        return text
+    out = SECRET_RE.sub("[REDACTED-SECRET]", text)
+    out = LABELLED_SECRET_RE.sub(r"\1[REDACTED-SECRET]", out)
+    return out
+
 def write_steering(selection, convo, raw_path, memlog):
     """Log steering the model spotted. It supplies an ID and a kind; the
     TEXT is copied verbatim from the transcript, so the model can no more
@@ -441,9 +486,9 @@ def write_steering(selection, convo, raw_path, memlog):
             "source": src,
             "kind": kind,
             "signal": "semantic",      # found by reading, not by phrase match
-            "text": msg["text"][:600],
-            "user_verbatim": msg["text"][:600],
-            "assistant_context": msg.get("lead_up", ""),
+            "text": redact(msg["text"][:600]),
+            "user_verbatim": redact(msg["text"][:600]),
+            "assistant_context": redact(msg.get("lead_up", "")),
             "cwd": msg["cwd"],
         })
     if not new:

@@ -26,6 +26,11 @@ removed it: against a real conversation it found 0 of 46 corrections. People
 do not announce a correction. They redirect. "bit lame", "simplify" and "why
 is this so slow" are all corrections, and no word list finds them.
 
+dk-mode also ships twelve well-known agent failure modes, so it steers on the
+first day. These carry `Source: baseline` and no evidence quote, because they
+did not come from you. Your own mined rules are better, and they replace these
+as they accumulate. Use `--no-baseline` at install to start empty.
+
 **2. It makes rules.** At an interval, a model reads the collected
 corrections. The model sorts them. It marks a repeated correction as a rule.
 It discards a single event. It writes the result into one file. You can read
@@ -220,6 +225,7 @@ and dk-mode operates with no key.
 | `DK_WATCH_MAX_TOKENS` | `2000` | The maximum length of the reply to the per-turn call. A reasoning model needs a large value. |
 | `DK_TIMEOUT` | `180` / `600` | The number of seconds to wait. A local model is slower. |
 | `DK_LOG_DIR` | `~/Library/Logs` | The directory for the error logs. |
+| `--no-baseline` (install flag) | off | Start with no rules at all, instead of the twelve baseline failure modes. |
 | `DK_HOME` | — | The directory that holds `.claude/memory`. `install.sh --global` sets it in the hooks. It has priority over the project. |
 | `DK_SESSION_ID` | — | Claude Code sets this variable. It keeps the reminders of one conversation separate from a different conversation. |
 
@@ -231,6 +237,16 @@ and dk-mode operates with no key.
   You can change it. You can delete a rule that you do not agree with.
 - `.claude/memory/.dk_state` and `.claude/memory/.dk_active.<conversation>` —
   the internal records.
+
+## Credentials
+
+People paste keys into conversations. dk-mode reads conversations, so it
+removes anything that looks like a credential before it writes: API keys,
+tokens, private keys, and any long value after a word such as `secret` or
+`password`. The text becomes `[REDACTED-SECRET]`.
+
+This is deliberately eager. A wrong removal costs one unreadable quote. A
+missed one writes a live key into a file that is read into prompts.
 
 ## Limits and failures
 
