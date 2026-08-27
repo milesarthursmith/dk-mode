@@ -223,15 +223,16 @@ and dk-mode operates with no key.
 
 ### Which model to use, and what it costs
 
-The per-turn call sends about 2,600 tokens and gets a few hundred back. At 100
-turns a day:
+The per-turn call sends up to about 3,600 tokens and gets a few hundred back:
+467 of instructions, up to 868 of rules, and up to 2,250 of conversation. At
+100 turns a day:
 
 | Backend | Cost per month | Notes |
 |---|---|---|
 | `DK_BACKEND=cli` | nothing | Uses the Claude login you already have. Slower, because it starts a process. |
-| Haiku 4.5 | about $11 | The cheapest Claude model. Known to be strict enough. |
-| Sonnet 5 | about $22 | Better judgement than it needs for this job. |
-| A cheap open model through OpenRouter | about $3 | See the warning below. |
+| Haiku 4.5 | about $16 | The cheapest Claude model. Strict enough. |
+| Sonnet 5 | about $31 | Better judgement than this job needs. |
+| A cheap open model through OpenRouter | about $4 | See the warning below. |
 
 Use `cli` unless you have a reason not to. It costs nothing and needs no key.
 
@@ -254,6 +255,8 @@ give it a better model: keep `DK_MODELS` at the default.
 | `DK_INTERVAL` | `7d` | The interval between the interval calls. Examples: `1h`, `per-turn`. |
 | `DK_USER_NAME` | — | Your name. The model then knows who "the user" is. |
 | `DK_WATCH` | `1` | Set it to `0` to stop the per-turn call. |
+| `DK_WATCH_TURNS` | `6` | How many recent messages the miner reads. Six messages is roughly your last three exchanges. |
+| `DK_MAX_RULES` | `40` | How many rules are described to the model each turn. Mined rules are kept over baseline ones when this bites. |
 | `DK_SCAN_LINES` | `150` | The quantity of the conversation to read. Set it to `0` to read all of it. |
 
 ### The less usual settings

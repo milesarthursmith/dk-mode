@@ -98,6 +98,8 @@ WATCH_MODELS = [m.strip() for m in os.environ.get(
 TURNS = int(os.environ.get("DK_WATCH_TURNS", "6"))
 TIMEOUT = int(os.environ.get("DK_WATCH_TIMEOUT", "120"))
 MAX_ACTIVE = 3
+# Ceiling on how many rules are described to the model each turn.
+MAX_RULES = int(os.environ.get("DK_MAX_RULES", "40"))
 
 ITEM_RE = re.compile(r"^### .*?(?=^### |^## |\Z)", re.M | re.S)
 
@@ -199,11 +201,23 @@ def load_rules():
             continue
         out.append({
             "id": len(out) + 1,
+            "mined": bool(field(block, "Evidence")),
             "heading": block.splitlines()[0].lstrip("# ").strip(),
             "looks_like": field(block, "What it looks like"),
             "reminder": reminder,
             "evidence": field(block, "Evidence"),
         })
+    # Every rule is sent to the model on every turn, so the list cannot grow
+    # without bound: 100 rules would be ~3,800 tokens of prompt, forever, on
+    # top of the conversation. Cap it, and when the cap bites, keep the rules
+    # MINED from this user over the generic baseline ones - yours are about
+    # you, the baseline is about agents in general.
+    if len(out) > MAX_RULES:
+        out.sort(key=lambda r: (not r["mined"], r["id"]))
+        out = out[:MAX_RULES]
+        out.sort(key=lambda r: r["id"])
+        for i, r in enumerate(out, 1):     # ids must stay 1..N and contiguous
+            r["id"] = i
     return out
 
 
@@ -262,56 +276,38 @@ def _read_messages(path):
     return msgs
 
 
-PROMPT = """You are the relevance layer of a self-steering system for a \
-coding agent. Below are known failure modes and standing rules for this \
-agent (each with an id), and the last few messages of a live conversation.
+PROMPT = """You do two jobs on one conversation between a coding agent and \
+its user. Answer with JSON only, no prose, no code fences.
 
-Decide which rules are LIVE RIGHT NOW - not which are true in general, but \
-which this specific situation is about to run into, judging from what the \
-agent just said and what the user just asked. Examples of a live rule: the \
-agent is about to claim something is finished (a done-claim rule is live); \
-the agent is about to build something new (a check-what-exists rule is \
-live); the agent gave a shallow answer to a research question (a \
-thoroughness rule is live).
+JOB 1 - which rules are live RIGHT NOW. Not which are true in general: which \
+this situation is about to run into, from what the agent just said and what \
+the user just asked. Live means about to claim something is finished, about \
+to build something that may already exist, just gave a shallow answer. \
+Be strict. Most turns have NO live rule and an empty list is the normal, \
+correct answer. At most {max_active}.
 
-Be strict. Most turns have NO live rule - returning an empty list is the \
-correct and common answer. Never select a rule just because it is important \
-in general. At most {max_active}.
+Optionally add one "alert": a single blunt present-tense sentence naming \
+what the agent is about to do wrong. Only if it is specific to THIS \
+conversation.
 
-If you see the agent actively about to repeat one of these failures, you may \
-add a single short "alert": one blunt present-tense sentence naming what it \
-is about to do wrong. No alert unless it is specific to this conversation.
+JOB 2 - which messages steered the agent. People steer by redirecting, not \
+by announcing a correction, so read for meaning rather than phrasing.
 
-SECOND JOB - capture. The phrase list that feeds this system only matches \
-blunt corrections ("you didn't run the tests"). Measured against real \
-transcripts it catches almost nothing, because people steer by REDIRECTING, \
-not by announcing a correction. So: look at the [user] messages below and \
-report any where the user steered the agent - rejected an approach, \
-redirected it, expressed dissatisfaction however mildly ("bit lame", "that's \
-overcomplicated", "simplify"), pointed out something missed, or stated a \
-preference or rule for future work. Casual, sarcastic and indirect wording \
-all count. Report the message id and a kind.
+REPORT a [user] message that rejected an approach, redirected it, showed \
+dissatisfaction however mild ("bit lame", "overcomplicated", "simplify"), \
+pointed out something missed, or set a rule for future work. Casual, \
+sarcastic and indirect all count. Source "human".
 
-Do NOT report: ordinary new requests, questions, approvals, or the user \
-simply moving on to the next task. A question that implies the work is \
-wrong ("why is this so slow?") IS steering; a question seeking information \
-is not. Be strict about this - a real run reported "basically find any \
-sessions and then find all the rules" and "yeah do that, start running" as \
-corrections. Both are plain instructions and neither belongs here. The test \
-is whether the user is CHANGING something about how you are working. \
-Starting a task, agreeing to a plan, or adding a requirement is not a \
-correction. Nor is your own status update, plan change, or note that an \
-external service needs attention - a self-correction is an admission that \
-something you did or claimed was WRONG.
+REPORT an [assistant] message where the agent admitted IT was wrong - the \
+approach failed, it made a mistake, it must start over. Source "self". Only \
+a clear admission, not ordinary iteration or a status update.
 
-Also report any [assistant] message where the AGENT corrected ITSELF - said \
-its own approach was wrong, that something did not work, that it had made a \
-mistake, or that it needed to start over. Mark these with source "self". \
-This is weaker evidence than a human correction: a plan changing course is \
-not always a failure worth remembering, so only report a clear admission of \
-a mistake, not ordinary iteration.
+DO NOT REPORT a new request, a question seeking information, an approval, or \
+the user moving on. The test: is the user CHANGING how you work? Starting a \
+task ("start running", "find all the sessions") and agreeing to a plan ("yeah \
+do that") are instructions, not corrections. "Why is this so slow?" IS \
+steering, because it implies the work is wrong.
 
-Reply with ONLY a JSON object, no prose, no code fences:
 {{"active": [ids], "alert": "..." or null,
  "steering": [{{"id": "<message id>", "source": "human|self",
                "kind": "correction|instruction|preference"}}]}}

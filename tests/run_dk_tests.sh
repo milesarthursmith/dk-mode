@@ -1336,6 +1336,36 @@ out=$(run_recall); rc=$?
 if [ ! -f "$RULES" ] && [ -z "$out" ] && [ "$rc" = "0" ]; then ok
 else bad "rules resurrected or output produced; rc=$rc out: [$out]"; fi
 
+t "103. the rules sent each turn are capped, and mined rules beat baseline ones"
+# Without a cap the per-turn prompt grows forever: mining only ever adds.
+sandbox
+python3 - "$RULES" <<'PYX'
+import re, sys
+p = sys.argv[1]; t = open(p).read()
+items = []
+for i in range(50):                      # 50 baseline-style, no Evidence
+    items.append(f"### Baseline item {i}\n**What it looks like:** generic\n"
+                 f"**Reminder line:** generic reminder {i}\n"
+                 f"**Source:** baseline\n**Status:** approved\n")
+for i in range(3):                       # 3 mined, WITH Evidence
+    items.append(f"### Mined item {i}\n**What it looks like:** specific\n"
+                 f"**Reminder line:** mined reminder {i}\n"
+                 f'**Evidence:** User, 2026-08-27: "you did not run it"\n'
+                 f"**Status:** approved\n")
+t = re.sub(r"(## Mistake Patterns\s*\n)", r"\1\n" + "\n".join(items), t, count=1)
+open(p, "w").write(t)
+PYX
+res=$(CLAUDE_PROJECT_DIR="$SB" DK_MAX_RULES=10 python3 -c "
+import importlib.util
+spec = importlib.util.spec_from_file_location('w', '$SCRIPTS/dk_watch.py')
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+r = m.load_rules()
+print(len(r), sum(1 for x in r if x['mined']), [x['id'] for x in r] == list(range(1, len(r)+1)))
+")
+set -- $res
+if [ "$1" = "10" ] && [ "$2" = "3" ] && [ "$3" = "True" ]; then ok
+else bad "got count=$1 mined=$2 ids-contiguous=$3 (want 10 / 3 / True)"; fi
+
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
 [ "$FAIL" = "0" ] || exit 1
