@@ -58,6 +58,14 @@ moment it applies.
 The first reason is the more important one. It is true on every turn, and it
 does not depend on dk-mode choosing the correct rule.
 
+## What to call it
+
+dk-mode uses the names the research already uses. In one sentence: it is an
+**out-of-band runtime monitor** over the agent's work, with an **episodic
+memory** built from your past corrections, which injects a **critic's** note
+into the next prompt. `docs/MECHANISM.md` section 1.1 gives the name for each
+part, and section 1.2 gives three words this project does not use, and why.
+
 ## The sources of the corrections
 
 dk-mode uses three sources. You do no additional work for these sources.

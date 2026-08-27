@@ -22,6 +22,32 @@ exactly these meanings.
 | **recall** | The part of dk-mode that puts text into the prompt. |
 | **the sorter** | The part of dk-mode that turns mined corrections into rules. |
 
+### 1.1 The standard name for each part
+
+dk-mode is built from parts that already have names in the research. This
+table gives the standard name for each one. Use these names. Do not invent
+new ones.
+
+| Part of dk-mode | Standard name | What that name means |
+|---|---|---|
+| `dk_watch.py`, when it decides what applies | **runtime monitor** | A program that watches an agent while it works. This one is **out of band**: it runs after the turn instead of inside it, and it never blocks. |
+| The `!` line it writes | **critic** | A component that evaluates work and returns a comment on it. The closest named method is **Reflexion**: a written criticism is added to the next attempt. dk-mode differs in one way. In Reflexion the agent criticises itself. Here a separate model does it. |
+| `dk.jsonl` and `dk_rules.md` | **episodic memory** | A store of specific past events, kept so they can change later behaviour. The term comes from Letta (formerly MemGPT) and from the Generative Agents work. |
+| `dk_consolidate.py` | **memory consolidation** | The work of turning many raw events into fewer durable rules. Letta calls an agent that does this while idle a **sleep-time agent**. |
+| The labeller in `dk_eval.py` | **LLM as a judge** | A model that scores work against written criteria. This is the correct name **here and nowhere else in dk-mode**. |
+
+### 1.2 Three words this project does NOT use
+
+| Word | Why not |
+|---|---|
+| **guardrail** | A guardrail can stop an action. dk-mode never stops anything. Every part of it exits successfully, always, even when it fails. |
+| **supervisor** | The research does not agree on a meaning for this word. It sounds exact and is not. |
+| **steering** | In interpretability research, steering means a change to a model's internal numbers. dk-mode does not do that. It writes text. The repository is named for the older, looser sense of the word, but the documents avoid it. |
+
+In one sentence, using only standard names: **dk-mode is an out-of-band
+runtime monitor over an agent's trace, with an episodic memory consolidated
+from past corrections, which injects a critic's note into the next prompt.**
+
 ---
 
 ## 2. What dk-mode does

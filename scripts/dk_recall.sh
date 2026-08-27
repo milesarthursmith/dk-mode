@@ -18,7 +18,7 @@
 #   capture hook silently dying).
 # - 3 consecutive FAILED consolidations -> "broken, not quiet" line.
 #
-# The relevance layer (dk_watch.py) decides WHICH rules apply to the live
+# The runtime monitor (dk_watch.py) decides WHICH rules apply to the live
 # conversation; this script just prints its verdict. See section 1.
 #
 # Deliberately NOT done here:
@@ -66,7 +66,7 @@ PAYLOAD="$(cat 2>/dev/null || true)"
 
 # 1. What to inject. Two tiers:
 #    a) the LIVE selection written by dk_watch.py after the previous turn -
-#       only the rules the relevance layer judged applicable to what is
+#       only the rules the runtime monitor judged applicable to what is
 #       actually happening (often nothing, which is correct);
 #    b) the static distilled note, when the watcher is off, has not run yet,
 #       or its selection has gone stale.
@@ -122,7 +122,7 @@ fi
 #     silence, which looks identical to "nothing was relevant".
 wcf=$(state_get watch_consecutive_failed); [ -n "$wcf" ] || wcf=0
 if [ "$wcf" -ge 3 ] 2>/dev/null; then
-  echo "(dk-mode: the relevance layer has failed its last $wcf runs - it is broken, not quiet. See dk_watch.log under \${DK_LOG_DIR:-~/Library/Logs or ~/.claude/logs})"
+  echo "(dk-mode: the runtime monitor has failed its last $wcf runs - it is broken, not quiet. See dk_watch.log under \${DK_LOG_DIR:-~/Library/Logs or ~/.claude/logs})"
 fi
 
 # 3. Broken-not-quiet: 3 consecutive FAILED consolidations (from state file).

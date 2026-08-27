@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""dk_watch.py - the relevance layer ("what applies RIGHT NOW").
+"""dk_watch.py - the runtime monitor ("what applies RIGHT NOW").
+
+Standard names, so this repository does not invent its own (see
+docs/MECHANISM.md section 1.1): this is an OUT-OF-BAND RUNTIME MONITOR - it
+watches the agent's work, runs after the turn rather than inside it, and never
+blocks. The one-line alert it writes is a CRITIC's note; the closest named
+method is Reflexion, except that there the agent criticises itself and here a
+separate model does it. It is NOT a guardrail, because it stops nothing, and
+NOT a judge, because it scores nothing.
 
 The problem this exists for: injecting the same distilled rules into every
 prompt is just a longer system prompt. Attention dilutes, and a rule that is

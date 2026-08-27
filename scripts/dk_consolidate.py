@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""dk_consolidate.py - periodic consolidation for dk-mode.
+"""MEMORY CONSOLIDATION: many raw events become fewer durable rules. Letta
+calls an agent that does this while idle a sleep-time agent. See
+docs/MECHANISM.md section 1.1 for the standard name of every part.
+
+dk_consolidate.py - periodic consolidation for dk-mode.
 
 Reads the unprocessed tail of .claude/memory/dk.jsonl (verbatim
 steering the user gave Claude, captured by dk_capture.sh), asks a strong

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""dk_eval.py - does the relevance layer speak up at the right moments?
+"""dk_eval.py - does the runtime monitor speak up at the right moments?
+
+The labeller here is an LLM AS A JUDGE: a model scoring work against written
+criteria. That name is correct in this file and nowhere else in dk-mode.
 
 Everything else in this repository tests plumbing. This measures judgement.
 

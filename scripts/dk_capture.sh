@@ -55,7 +55,7 @@ TRANSCRIPT="$(printf '%s' "$PAYLOAD" | grep -o '"transcript_path"[[:space:]]*:[[
 # selection to, and dk_recall.sh reads that file by the session id in its own
 # payload. This was never passed, so the miner wrote .dk_active.nosession
 # while recall looked for .dk_active.<real-id> and always fell back to the
-# static note. The relevance layer produced answers nothing ever read.
+# static note. The runtime monitor produced answers nothing ever read.
 SESSION="$(printf '%s' "$PAYLOAD" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:[[:space:]]*"//; s/"$//' || true)"
 
 # Nothing may sit between here and the launch. Anything that can exit early
