@@ -1,0 +1,24 @@
+{
+ "date": "2026-08-27_1042",
+ "model": "claude-cli/haiku",
+ "split": "conflicting",
+ "limit": 1,
+ "epochs": 1,
+ "challenge_n": 1,
+ "rows": [
+  {
+   "arm": "baseline",
+   "status": "success",
+   "score": 0.0,
+   "samples": 1,
+   "gen_count": 0,
+   "dk_calls": 0,
+   "dk_fired": 0,
+   "challenge_fired": 0,
+   "injected_chars": 0,
+   "dk_rules_picked": [],
+   "dk_alerts": [],
+   "dk_errors": []
+  }
+ ]
+}

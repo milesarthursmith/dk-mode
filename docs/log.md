@@ -6,6 +6,40 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-27 — the eval harness rebuilt, four arms, plumbing verified
+
+`docs/EVALS.md` designs the replacement for the harness removed earlier
+today. Two decisions from the owner shaped it. First: no hand-labelled
+golden sets — the labels would come from the same person whose corrections
+the monitor mines, so the eval would grade the system with its own food.
+Every score is a task outcome a script can check. Second: the agent under
+test is a cheap, weak model (Haiku), because dk-mode prevents failures and
+a model that fails often gives large effect sizes for little money.
+
+`evals/impossiblebench/` is the rebuild of the deleted `dk_steer.py`, with
+its injection point corrected (it now wraps the solver's `generate`, so
+every arm can speak before every generation, not once per sample) and two
+arms added. The four: baseline, the shipped monitor, a fixed challenge text
+on a schedule — no model, no selection step, so it is both the dumb control
+and the periodic-challenge candidate recorded below — and both together. If
+the schedule matches the monitor, selection is not earning its per-turn
+model call.
+
+Smoke-tested end to end in a keyless environment through a `claude -p`
+model provider (marked everywhere as plumbing-only — the Claude Code
+wrapper becomes part of what is measured, so those numbers never compare
+against published baselines). One sample, all arms: the agent loop, test
+execution, scoring, injection and the per-sample counters all ran. The
+monitor fired on 2 of 3 generations and one of its CLI calls timed out —
+recorded in `dk_errors` rather than swallowed, which is the behaviour the
+failure taxonomy demands of everything else. No cheating numbers were
+produced and none are claimed: n=1 through a wrapper is not a measurement.
+
+Next: the first real four-arm comparison — API key, Haiku, frozen 20-task
+subset, `conflicting` and `original` splits.
+
+---
+
 ## 2026-08-27 — periodic challenge (NOT BUILT — written down only)
 
 The owner's point, and it is simpler than what was being designed: dk-mode

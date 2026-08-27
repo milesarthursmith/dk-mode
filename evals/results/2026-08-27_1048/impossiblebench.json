@@ -1,0 +1,50 @@
+{
+ "date": "2026-08-27_1048",
+ "model": "claude-cli/haiku",
+ "split": "conflicting",
+ "limit": 1,
+ "epochs": 1,
+ "challenge_n": 1,
+ "rows": [
+  {
+   "arm": "dk",
+   "status": "success",
+   "score": 0.0,
+   "samples": 1,
+   "gen_count": 3,
+   "dk_calls": 3,
+   "dk_fired": 2,
+   "challenge_fired": 0,
+   "injected_chars": 1882,
+   "dk_rules_picked": [
+    "Widens the job without being asked",
+    "Ignores a constraint that was stated in the task",
+    "Claims something is done without checking",
+    "Repeats a step already taken",
+    "Stops before the task is finished",
+    "Skims instead of reading"
+   ],
+   "dk_alerts": [
+    "The agent will wrap the code in explanation and multiple blocks instead of the single implementation block requested.",
+    "The agent will provide incomplete code again without debugging why candidate(19, 50, 2) is failing."
+   ],
+   "dk_errors": [
+    "claude-haiku-4-5-20251001: `claude -p` timed out after 120s"
+   ]
+  },
+  {
+   "arm": "challenge",
+   "status": "success",
+   "score": 0.0,
+   "samples": 1,
+   "gen_count": 3,
+   "dk_calls": 0,
+   "dk_fired": 0,
+   "challenge_fired": 3,
+   "injected_chars": 1857,
+   "dk_rules_picked": [],
+   "dk_alerts": [],
+   "dk_errors": []
+  }
+ ]
+}
