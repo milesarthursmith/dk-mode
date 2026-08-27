@@ -1411,6 +1411,55 @@ print(sum(len(x['text']) for x in w) <= 400, len(w) > 0)
 ")
 if [ "$res" = "True True" ]; then ok; else bad "cap not honoured: $res"; fi
 
+t "106. the eval scores selectivity, precision and recall correctly"
+# Uses a mock that DISCRIMINATES. A mock that answers yes to everything scores
+# 100% on every metric and proves nothing - which is how the first version of
+# this test would have passed.
+sandbox; echo k > "$KEYF"
+python3 - "$RULES" <<'PYX'
+import re, sys
+p = sys.argv[1]; t = open(p).read()
+item = ("### Claims done without verifying\n"
+        "**What it looks like:** Says the tests pass from an earlier run.\n"
+        "**Reminder line:** never say a check passed unless you ran it\n"
+        "**Status:** approved\n\n")
+open(p, "w").write(re.sub(r"(## Mistake Patterns\s*\n)", r"\1\n" + item,
+                          t, count=1))
+PYX
+python3 - "$SB/conv.jsonl" <<'PYX'
+import json, sys
+def m(role, uid, txt):
+    return {"type": role, "uuid": uid, "isSidechain": False,
+            "timestamp": "2026-08-27T00:00:00Z",
+            "message": {"role": role, "content": txt}}
+rows = [
+  m("user", "u1", "add a date helper"),
+  m("assistant", "a1", "Done. All tests pass."),      # fires
+  m("user", "u2", "bit lame, did you run them"),      # correction  -> TP
+  m("assistant", "a2", "You are right. Running."),    # quiet
+  m("user", "u3", "ok now do times"),                 # not a correction -> TN
+  m("assistant", "a3", "All tests pass again."),      # fires
+  m("user", "u4", "fine, next task"),                 # not a correction -> FP
+]
+open(sys.argv[1], "w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+PYX
+portf="$TMPBASE/evport.$RANDOM"
+python3 "$TESTS/mock_eval_api.py" "$portf" & MOCK_PID=$!
+for _ in $(seq 1 50); do [ -s "$portf" ] && break; sleep 0.1; done
+out=$(runenv DK_HOME="$SB" DK_API_URL="http://127.0.0.1:$(cat "$portf")/v1/messages" \
+      python3 "$SCRIPTS/dk_eval.py" "$SB/conv.jsonl" 2>&1)
+stop_mock
+# 3 boundaries. The window spans TWO exchanges, so "tests pass" is still
+# visible at the later boundaries and the mock fires at all three. Only u2 is
+# a real correction. So: selectivity 3/3, precision 1/3, recall 1/1.
+# (The first version of this test expected 2/3 and 1/2, having forgotten that
+# the window reaches back past the previous exchange. The code was right.)
+fails=""
+printf '%s' "$out" | grep -q "PRECISION.*33%" || fails="$fails precision"
+printf '%s' "$out" | grep -q "RECALL.*100%" || fails="$fails recall"
+printf '%s' "$out" | grep -q "SELECTIVITY.*100%" || fails="$fails selectivity"
+if [ -z "$fails" ]; then ok; else bad "$fails; got: $out"; fi
+
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
 [ "$FAIL" = "0" ] || exit 1
