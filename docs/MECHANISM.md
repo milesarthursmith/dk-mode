@@ -223,19 +223,23 @@ The miner makes one model call per turn. The call has three parts:
 | The recent messages | up to 2,250 tokens | Yes |
 | **Total** | **up to about 3,600 tokens** | |
 
-**The recent messages.** The setting `DK_WATCH_TURNS` controls this, and its
-default is **6**. This means the last **6 messages**, not 6 turns. Your
-message and Claude's answer are two messages, so 6 messages is about your last
-three turns.
+**The recent messages.** dk-mode counts this in **exchanges**, not messages.
 
-Each message is cut at 1,500 characters. So this part is at most 9,000
-characters, which is about 2,250 tokens. Usually it is much less.
+One turn is not one message. Claude thinks, calls tools and writes as it
+works, and each piece of text is a separate entry in the transcript. One
+question from you can produce 25 entries from Claude.
 
-The number is 6 because the miner judges what happens **now**. A rule applies
-because of what Claude just said and what you just asked. Older messages
-describe a situation that has changed. They also cost tokens on every turn.
-Increase `DK_WATCH_TURNS` if your work has longer arcs. The cost increases at
-the same rate.
+So the window walks backwards until it has included `DK_WATCH_EXCHANGES` of
+**your** messages. The default is **2**: this exchange, and the one before it,
+whatever Claude did inside them. `DK_WATCH_CHARS` limits the total size, and
+its default is 9,000 characters, about 2,250 tokens. When that limit applies,
+dk-mode keeps the newest messages.
+
+The earlier version counted 6 messages instead. On a real conversation that
+window held **no message from the user at all on 33% of turns**, because
+Claude had produced six or more entries inside one turn. The miner then judged
+Claude talking to itself, with no knowledge of the request, and job 2 had
+nothing to look for.
 
 **The rules.** Each rule is sent as `number. name - what it looks like`. The
 model needs the description to judge. The names alone are four times smaller,

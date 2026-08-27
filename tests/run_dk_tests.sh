@@ -754,7 +754,9 @@ ids=[json.loads(l)['uuid'] for l in open('$FIX/transcript_real_missed.jsonl')]
 print(json.dumps({'active':[], 'alert':None,
   'steering':[{'id':i,'kind':'correction'} for i in ids[:3]]}))")
 start_watch_mock "$ids"
-runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" DK_WATCH_TURNS=20 \
+# The fixture is five consecutive user messages, which no real conversation
+# looks like, so the window has to be told to reach back past two of them.
+runenv DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" DK_WATCH_EXCHANGES=20 \
   python3 "$SCRIPTS/dk_watch.py" "$FIX/transcript_real_missed.jsonl"
 stop_mock
 if [ "$(lines "$RAW")" = "3" ] \
@@ -1365,6 +1367,49 @@ print(len(r), sum(1 for x in r if x['mined']), [x['id'] for x in r] == list(rang
 set -- $res
 if [ "$1" = "10" ] && [ "$2" = "3" ] && [ "$3" = "True" ]; then ok
 else bad "got count=$1 mined=$2 ids-contiguous=$3 (want 10 / 3 / True)"; fi
+
+t "104. the window always reaches back to the user, however long the turn ran"
+# A turn is not a message. Claude thinks, calls tools and narrates, and each
+# text block is its own entry. Measured on a real conversation, a plain
+# last-6-messages window contained NO user message on 33% of turns - so the
+# miner judged Claude talking to itself, with no idea what had been asked.
+sandbox
+python3 - "$SB/long.jsonl" <<'PYX'
+import json, sys
+rows = [{"type": "user", "uuid": "u1", "isSidechain": False,
+         "timestamp": "2026-08-27T00:00:00Z",
+         "message": {"role": "user", "content": "bit lame, simplify it"}}]
+# One enormous agentic turn: 25 assistant messages after that single request.
+for i in range(25):
+    rows.append({"type": "assistant", "uuid": "a%d" % i, "isSidechain": False,
+                 "timestamp": "2026-08-27T00:0%d:00Z" % (i % 10),
+                 "message": {"role": "assistant",
+                             "content": "step %d of the work" % i}})
+open(sys.argv[1], "w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+PYX
+res=$(CLAUDE_PROJECT_DIR="$SB" python3 -c "
+import importlib.util
+spec = importlib.util.spec_from_file_location('w', '$SCRIPTS/dk_watch.py')
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+msgs = m._read_messages('$SB/long.jsonl')
+w = m.recent_exchanges(msgs, 2, 9000)
+print(sum(1 for x in w if x['role'] == 'user'), len(w), w[-1]['role'])
+")
+set -- $res
+# Must include the request, must stay bounded, must end on the newest message.
+if [ "$1" -ge 1 ] && [ "$2" -le 26 ] && [ "$3" = "assistant" ]; then ok
+else bad "users=$1 size=$2 last=$3 (want >=1 user, bounded, newest last)"; fi
+
+t "105. the window is capped so one enormous turn cannot fill the prompt"
+res=$(CLAUDE_PROJECT_DIR="$SB" python3 -c "
+import importlib.util
+spec = importlib.util.spec_from_file_location('w', '$SCRIPTS/dk_watch.py')
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+msgs = m._read_messages('$SB/long.jsonl')
+w = m.recent_exchanges(msgs, 2, 200)          # a deliberately tiny budget
+print(sum(len(x['text']) for x in w) <= 400, len(w) > 0)
+")
+if [ "$res" = "True True" ]; then ok; else bad "cap not honoured: $res"; fi
 
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"

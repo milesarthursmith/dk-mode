@@ -96,6 +96,12 @@ WATCH_MODELS = [m.strip() for m in os.environ.get(
     os.environ.get("DK_MODELS", "qwen2.5:14b-instruct") if BACKEND == "openai"
     else "claude-haiku-4-5-20251001").split(",") if m.strip()]
 TURNS = int(os.environ.get("DK_WATCH_TURNS", "6"))
+# How many of the user's own messages the window must reach back to include.
+# Two means the current exchange plus the one before it, however many messages
+# Claude produced inside them.
+EXCHANGES = int(os.environ.get("DK_WATCH_EXCHANGES", "2"))
+# Ceiling on the window, so one 25-message turn cannot fill the prompt.
+WINDOW_CHARS = int(os.environ.get("DK_WATCH_CHARS", "9000"))
 TIMEOUT = int(os.environ.get("DK_WATCH_TIMEOUT", "120"))
 MAX_ACTIVE = 3
 # Ceiling on how many rules are described to the model each turn.
@@ -221,12 +227,41 @@ def load_rules():
     return out
 
 
+def recent_exchanges(msgs, want_users, char_cap):
+    """The last few EXCHANGES, not the last few messages.
+
+    A single turn can be enormous: Claude thinks, calls tools, and narrates,
+    and each text block is its own transcript entry. Measured on a real
+    conversation, 40% of turns produced 6 or more assistant messages, worst
+    case 25. A plain `msgs[-6:]` therefore often contained no user message at
+    all - so the miner judged Claude talking to itself, with no idea what had
+    been asked, and Job 2 had nothing to look for.
+
+    Walk back until `want_users` user messages are included, then stop. A
+    character cap keeps one enormous turn from filling the prompt; it keeps
+    the NEWEST messages, which are the ones that matter.
+    """
+    out, users, chars = [], 0, 0
+    for msg in reversed(msgs):
+        cost = len(msg["text"])
+        if out and chars + cost > char_cap:
+            break
+        out.append(msg)
+        chars += cost
+        if msg["role"] == "user":
+            users += 1
+            if users >= want_users:
+                break
+    out.reverse()
+    return out
+
+
 def transcript_windows(path, n, whole=False):
     """The recent window, or - for backfill - every window of a whole
     transcript so history is covered rather than sampled."""
     msgs = _read_messages(path)
     if not whole:
-        return msgs[-n:]
+        return recent_exchanges(msgs, EXCHANGES, WINDOW_CHARS)
     cap = int(os.environ.get("DK_BACKFILL_WINDOWS", "40"))
     return [msgs[i:i + n] for i in range(0, len(msgs), n)][:cap] or []
 

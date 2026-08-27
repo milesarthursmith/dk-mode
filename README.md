@@ -255,7 +255,9 @@ give it a better model: keep `DK_MODELS` at the default.
 | `DK_INTERVAL` | `7d` | The interval between the interval calls. Examples: `1h`, `per-turn`. |
 | `DK_USER_NAME` | — | Your name. The model then knows who "the user" is. |
 | `DK_WATCH` | `1` | Set it to `0` to stop the per-turn call. |
-| `DK_WATCH_TURNS` | `6` | How many recent messages the miner reads. Six messages is roughly your last three exchanges. |
+| `DK_WATCH_EXCHANGES` | `2` | How many of your own messages the miner's window reaches back to include. Two means this exchange and the one before it, however many messages Claude produced inside them. |
+| `DK_WATCH_CHARS` | `9000` | The size limit on that window, so one very long turn cannot fill the prompt. |
+| `DK_WATCH_TURNS` | `6` | Window size when mining history only. It does not affect live turns. |
 | `DK_MAX_RULES` | `40` | How many rules are described to the model each turn. Mined rules are kept over baseline ones when this bites. |
 | `DK_SCAN_LINES` | `150` | The quantity of the conversation to read. Set it to `0` to read all of it. |
 
