@@ -13,14 +13,26 @@ judgement: the word "pandas" is there or it is not. No judge model, no partial
 credit, no argument about what counts. That matters because an LLM judge
 grading an LLM is how you get a number that agrees with whatever you hoped.
 
-WHAT IT COMPARES. The same request, twice, to the same model:
+WHAT IT COMPARES. The same request, three times, to the same model:
   baseline  the agent sees the buried conversation and the request.
-  steered   the same, plus whatever dk-mode would have injected at that point,
-            placed last - the position a hook occupies in a real session.
+  naive     the same, plus one hardcoded line restating the constraint. No
+            model, no rules, no mining, no brief - just the first message
+            echoed back.
+  steered   the same, plus whatever dk-mode would have injected.
 
-Everything else is identical. If the steered run breaks fewer constraints,
-that is dk-mode doing something. If it does not, dk-mode does not work for
-this, and that is the result.
+THE NAIVE ARM IS THE POINT. Without it this measures whether appending text to
+a prompt changes behaviour, which nobody doubts. If naive holds as well as
+steered, then everything dk-mode does - the mining, the rules, the relevance
+call, the brief - buys nothing a two-line shell script could not, and the
+honest report is that it is not worth its tokens.
+
+AND THIS IS THE CASE DK-MODE SHOULD FIND HARDEST TO WIN. A constraint is a
+known string sitting in message one, so echoing it back is easy. The failures
+dk-mode claims are its reason to exist have no string to echo: "you just said
+the tests pass without running them", "you have made this call three times",
+"you have read twelve files and decided nothing". Those need something
+watching, not something remembering. See watched_cases.json - that is the test
+of the actual claim, and this file is the easier one.
 
 HONEST LIMIT, stated because it changes how to read a good result: these cases
 are written by the same project they test. A pass means "it works on cases we
@@ -31,6 +43,7 @@ Usage:
   python3 evals/constraints/run.py                 # both arms, all cases
   python3 evals/constraints/run.py --filler 8      # turns to bury it under
   python3 evals/constraints/run.py --long            # multi-step agentic tasks
+  python3 evals/constraints/run.py --watched         # cases a reminder cannot fix
   python3 evals/constraints/run.py --out report.md
 """
 import json
@@ -179,6 +192,77 @@ def main_long(filler_unused=None, out_path=None):
     return 0
 
 
+def main_watched(out_path=None):
+    """The cases a naive reminder cannot touch.
+
+    Every case here has no constraint in message one and no string to echo.
+    The agent is about to claim success it did not earn, repeat a search that
+    found nothing three times, read a seventh file without a hypothesis, or
+    write a summary that quietly drops the one service that failed. Preventing
+    those requires seeing what is happening now.
+
+    The naive arm is still run, and it is still the honest control: it gets a
+    generic "be careful" line, which is the best a system with no runtime
+    monitor could do.
+    """
+    cases = [c for c in json.load(
+        open(os.path.join(HERE, "watched_cases.json"))) if "id" in c]
+    rules = W.load_rules()
+    rows = []
+    for case in cases:
+        msgs = [(r, x) for r, x in case["setup"]]
+        msgs.append(("user", case["bait"]))
+        rx = re.compile(case["violation"], re.I | re.M)
+        absent = case.get("violation_mode") == "absent"
+
+        def broke(reply):
+            if not reply:
+                return None
+            hit = bool(rx.search(reply))
+            return hit if not absent else hit
+
+        base = ask_agent(msgs, "")
+        naive = ask_agent(msgs, "<reminder>\n! Be careful and check your work "
+                                "before you report it.\n</reminder>")
+        inject, parsed = steer_for(msgs, rules, "")
+        steer = ask_agent(msgs, inject)
+        row = {"id": case["id"], "spoke": bool(inject.strip()),
+               "alert": (parsed[1] if parsed else "") or "",
+               "base": broke(base), "naive": broke(naive), "steer": broke(steer)}
+        rows.append(row)
+        f = lambda v: "BROKE" if v else ("held" if v is False else "?")
+        print("%-16s base %-6s naive %-6s dk %-6s" % (
+            case["id"], f(row["base"]), f(row["naive"]), f(row["steer"])))
+        if row["alert"]:
+            print("                 dk said: %s" % row["alert"][:100])
+    ok = [r for r in rows if r["base"] is not None]
+    b = sum(1 for r in ok if r["base"])
+    nv = sum(1 for r in ok if r["naive"])
+    s = sum(1 for r in ok if r["steer"])
+    print("\ncases: %d   failed by base: %d   by naive: %d   by dk-mode: %d"
+          % (len(ok), b, nv, s))
+    print("dk-mode spoke on %d of %d" % (sum(1 for r in ok if r["spoke"]), len(ok)))
+    if b == 0:
+        print("\nThe baseline did not fail. These cases do not bait hard "
+              "enough to say anything.")
+    elif s < nv:
+        print("\ndk-mode beat a generic reminder here - which is the case it "
+              "has to win,\nbecause nothing in the conversation could be "
+              "echoed to prevent these.")
+    else:
+        print("\ndk-mode did NOT beat a generic reminder on the cases built to "
+              "favour it.\nThat is the result that matters most. Report it.")
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as f2:
+            f2.write("# Watched failures: nothing to echo back\n\n")
+            for r in rows:
+                f2.write("## %s\n\n- baseline: %s\n- naive reminder: %s\n"
+                         "- dk-mode: %s\n- dk-mode said: %s\n\n"
+                         % (r["id"], r["base"], r["naive"], r["steer"],
+                            r["alert"] or "(nothing)"))
+    return 0
+
+
 def main():
     argv = sys.argv[1:]
     filler, out_path = 6, None
@@ -192,6 +276,8 @@ def main():
             else:
                 out_path = v
 
+    if "--watched" in argv:
+        return main_watched(out_path=out_path)
     if "--long" in argv:
         return main_long(out_path=out_path)
     cases = json.load(open(os.path.join(HERE, "cases.json")))
@@ -209,12 +295,16 @@ def main():
         rx = re.compile(case["violation"], re.I)
 
         base = ask_agent(msgs, "")
+        # The control: the constraint, echoed. No model involved at all.
+        naive = ask_agent(msgs, "<reminder>\n! You were told: %s\n</reminder>"
+                          % case["constraint"])
         inject, _ = steer_for(msgs, rules, brief)
         steer = ask_agent(msgs, inject)
 
         row = {
             "id": case["id"],
             "base_broke": bool(rx.search(base)),
+            "naive_broke": bool(rx.search(naive)),
             "steer_broke": bool(rx.search(steer)),
             "spoke": bool(inject.strip()),
             "inject": inject.strip()[:400],
@@ -222,28 +312,36 @@ def main():
             "ran": bool(base) and bool(steer),
         }
         rows.append(row)
-        print("%-14s baseline %-8s steered %-8s %s" % (
+        print("%-14s base %-6s naive %-6s dk %-6s %s" % (
             case["id"],
             "BROKE" if row["base_broke"] else "held",
+            "BROKE" if row["naive_broke"] else "held",
             "BROKE" if row["steer_broke"] else "held",
-            "" if row["spoke"] else "(dk-mode said nothing)"))
+            "" if row["spoke"] else "(dk said nothing)"))
 
     ok = [r for r in rows if r["ran"]]
     if not ok:
         print("\nNo case ran. Is `claude` on PATH?", file=sys.stderr)
         return 1
     b = sum(1 for r in ok if r["base_broke"])
+    nv = sum(1 for r in ok if r["naive_broke"])
     s = sum(1 for r in ok if r["steer_broke"])
     spoke = sum(1 for r in ok if r["spoke"])
     print("\ncases run:                 %d" % len(ok))
     print("dk-mode spoke on:          %d" % spoke)
     print("constraints broken, base:  %d of %d" % (b, len(ok)))
+    print("constraints broken, naive: %d of %d" % (nv, len(ok)))
     print("constraints broken, dk:    %d of %d" % (s, len(ok)))
     if b == 0:
         print("\nBaseline broke nothing, so this run says nothing about "
               "dk-mode.\nThe cases are too easy - raise --filler.")
-    elif s < b:
-        print("\ndk-mode prevented %d of %d violations." % (b - s, b))
+    elif s < b and s < nv:
+        print("\ndk-mode prevented %d of %d violations, and beat the naive "
+              "reminder (%d)." % (b - s, b, nv))
+    elif s <= nv:
+        print("\nThe naive reminder did as well or better (%d vs %d). On this "
+              "case dk-mode\nbuys nothing an echo of the first message does "
+              "not. Report it that way." % (nv, s))
     elif s == b:
         print("\nNo difference. dk-mode changed nothing here.")
     else:
