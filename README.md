@@ -221,6 +221,30 @@ almost any model.
 A local server does not need a key. Set `DK_BACKEND=openai` and `DK_API_URL`,
 and dk-mode operates with no key.
 
+### Which model to use, and what it costs
+
+The per-turn call sends about 2,600 tokens and gets a few hundred back. At 100
+turns a day:
+
+| Backend | Cost per month | Notes |
+|---|---|---|
+| `DK_BACKEND=cli` | nothing | Uses the Claude login you already have. Slower, because it starts a process. |
+| Haiku 4.5 | about $11 | The cheapest Claude model. Known to be strict enough. |
+| Sonnet 5 | about $22 | Better judgement than it needs for this job. |
+| A cheap open model through OpenRouter | about $3 | See the warning below. |
+
+Use `cli` unless you have a reason not to. It costs nothing and needs no key.
+
+**A warning about cheap models here.** This call is a strictness test, not a
+summary. On most turns the correct answer is "no rule applies", and a weak
+model says yes too often. That fills each prompt with reminders that do not
+apply, which is the exact failure dk-mode exists to prevent - a rule that
+appears constantly is ignored. Measure a cheap model on your own conversations
+before you trust it. Do not assume it behaves like the expensive one.
+
+The interval call is different. It runs rarely and makes real judgements, so
+give it a better model: keep `DK_MODELS` at the default.
+
 ### The behaviour
 
 | Setting | Default | Function |
