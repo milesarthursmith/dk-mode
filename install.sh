@@ -7,8 +7,9 @@
 #   2. Bootstraps <project>/.claude/memory/ and seeds dk_rules.md from the
 #      template ONLY if absent - never overwrites existing memory. Re-running
 #      is always safe.
-#   3. Merges the two hook entries (Stop -> dk_capture.sh,
-#      UserPromptSubmit -> dk_recall.sh) into <project>/.claude/settings.json,
+#   3. Merges the three hook entries (Stop -> dk_capture.sh,
+#      UserPromptSubmit -> dk_recall.sh, PostToolUse -> dk_tripwire.py)
+#      into <project>/.claude/settings.json,
 #      preserving everything already there. If that edit fails for ANY reason
 #      (no python, malformed JSON, a permission system blocking settings
 #      edits), it prints the exact JSON block and file path for manual paste
@@ -16,6 +17,7 @@
 #      didn't. Verify the file actually changed; don't assume.
 #
 # Usage: install.sh [--target PROJECT_ROOT | --global] [--update] [--no-hooks]
+#                   [--no-baseline]
 #   --target   project to install into (default: $CLAUDE_PROJECT_DIR, else pwd)
 #   --no-baseline  do not seed the well-known agent failure modes. By default
 #              a new install starts with templates/baseline_rules.md, marked
@@ -50,7 +52,7 @@ while [ $# -gt 0 ]; do
     --no-baseline) NO_BASELINE=1; shift ;;
     --update) UPDATE=1; shift ;;
     --no-hooks) NO_HOOKS=1; shift ;;
-    -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
 done
@@ -195,7 +197,7 @@ registered=no
 merge_out=""
 if [ "$NO_HOOKS" = "1" ]; then
   :
-elif merge_out=$(SETTINGS="$SETTINGS" CAPTURE_CMD="$CAPTURE_CMD" RECALL_CMD="$RECALL_CMD" TRIP_CMD="$TRIP_CMD" python3 - 2>&1 <<'PY'
+elif merge_out=$(SETTINGS="$SETTINGS" CAPTURE_CMD="$CAPTURE_CMD" RECALL_CMD="$RECALL_CMD" TRIP_CMD="$TRIP_CMD" TRIP_SCRIPT="$VENDOR/scripts/dk_tripwire.py" python3 - 2>&1 <<'PY'
 import json, os, sys, tempfile
 
 path = os.environ["SETTINGS"]
@@ -221,9 +223,13 @@ if not has_cmd(stop, os.environ["CAPTURE_CMD"]):
 ups = hooks.setdefault("UserPromptSubmit", [])
 if not has_cmd(ups, os.environ["RECALL_CMD"]):
     ups.append(rec); changed = True
-pt = hooks.setdefault("PostToolUse", [])
-if not has_cmd(pt, os.environ["TRIP_CMD"]):
-    pt.append(trip); changed = True
+# Only register the tripwire if the script is actually there. An old vendor
+# clone refreshed without --update has no dk_tripwire.py, and a hook pointing
+# at a missing file runs python3 on nothing after every single tool call.
+if os.path.isfile(os.environ.get("TRIP_SCRIPT", "")):
+    pt = hooks.setdefault("PostToolUse", [])
+    if not has_cmd(pt, os.environ["TRIP_CMD"]):
+        pt.append(trip); changed = True
 
 if changed:
     d = os.path.dirname(path)
@@ -261,5 +267,5 @@ fi
 echo
 echo "Optional next steps:"
 echo "  bash $VENDOR/scripts/dk_backfill.sh --target $TARGET   # mine previous sessions"
-echo "  gitignore: add .claude/vendor/ to $TARGET/.gitignore"
+[ "$GLOBAL" = "1" ] || echo "  gitignore: add .claude/vendor/ to $TARGET/.gitignore"
 exit 0

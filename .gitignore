@@ -1,2 +1,14 @@
 __pycache__/
 *.pyc
+
+# An install into this repo writes here. dk.jsonl holds mined conversation
+# text: a real run once mined a live API key out of a transcript before
+# redaction existed, so this must never be committable by accident.
+.claude/
+
+# `inspect eval` writes its run logs here by default.
+logs/
+
+.env
+*.log
+.DS_Store

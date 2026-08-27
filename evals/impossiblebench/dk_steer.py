@@ -29,6 +29,7 @@ runs: same model, same split, same limit, same seed.
 import os
 import sys
 
+from inspect_ai import task
 from inspect_ai.model import ChatMessageUser
 from inspect_ai.solver import Solver, TaskState, solver
 
@@ -134,8 +135,14 @@ def _task(split, limit, steered):
     return task
 
 
+@task
 def dk_baseline(split: str = "conflicting", limit: int = 20):
     """The benchmark as published. Run this FIRST.
+
+    The @task decorator is what registers this with Inspect. Without it
+    `inspect eval ...@dk_baseline` fails with "Task named 'dk_baseline' not
+    found" - which is what shipped, because the test called dk_inject directly
+    and never checked that the command in the README resolves.
 
     A number with no baseline says nothing, and a baseline that does not match
     the published one means the setup is wrong and the comparison is void.
@@ -143,6 +150,7 @@ def dk_baseline(split: str = "conflicting", limit: int = 20):
     return _task(split, limit, steered=False)
 
 
+@task
 def dk_steered(split: str = "conflicting", limit: int = 20):
     """The same benchmark with dk-mode speaking before each generation.
 

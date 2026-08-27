@@ -1664,6 +1664,51 @@ print(len(m.load_rules()))
 ")
 if [ "$n" = "2" ]; then ok; else bad "loader sees $n rules, want 2 (the quote split the file)"; fi
 
+t "119. the eval task names the README tells you to run actually resolve"
+# They did not. dk_baseline and dk_steered lacked the @task decorator, so
+# `inspect eval ...@dk_baseline` failed with "Task named 'dk_baseline' not
+# found" - while test 107 passed, because it called dk_inject directly and
+# never touched the command a reader would type. That is this repo's own rule
+# "tests the parts and never the wiring", shipped by the repo that ships it.
+if ! python3 -c "import inspect_ai" 2>/dev/null; then
+  ok
+else
+  out=$(cd "$REPO" && timeout 120 inspect eval \
+        evals/impossiblebench/dk_steer.py@dk_baseline \
+        --model mockllm/model --limit 1 2>&1)
+  # Resolving is the test. It then exits on the missing optional dependency,
+  # which is the correct behaviour and proves the task was found.
+  if printf '%s' "$out" | grep -q "not found"; then
+    bad "task does not resolve: $(printf '%s' "$out" | tail -2)"
+  elif printf '%s' "$out" | grep -q "impossiblebench is not installed"; then ok
+  else ok; fi
+fi
+
+t "120. the tripwire hook is not registered when its script is absent"
+# An old vendor clone refreshed without --update has no dk_tripwire.py. A hook
+# pointing at a missing file runs python3 on nothing after every tool call.
+sandbox
+PROJ="$SB/noTrip"; mkdir -p "$PROJ"
+(cd "$REPO" && DK_REPO_URL="file:///nope-$$" bash install.sh --target "$PROJ" >/dev/null 2>&1)
+rm -f "$PROJ/.claude/vendor/dk-mode/scripts/dk_tripwire.py"
+rm -f "$PROJ/.claude/settings.json"
+(cd "$REPO" && DK_REPO_URL="file:///nope-$$" bash install.sh --target "$PROJ" >/dev/null 2>&1)
+got=$(python3 -c "
+import json, sys, os
+p = sys.argv[1]
+d = json.load(open(p)) if os.path.exists(p) else {}
+pt = d.get('hooks', {}).get('PostToolUse', [])
+print('registered' if any('dk_tripwire' in h.get('command','')
+      for e in pt for h in e.get('hooks', [])) else 'absent')
+" "$PROJ/.claude/settings.json" 2>/dev/null)
+# The installer re-copies the vendor tree, so the file returns and registering
+# is correct. What must never happen is registering when it is genuinely gone.
+if [ -f "$PROJ/.claude/vendor/dk-mode/scripts/dk_tripwire.py" ]; then
+  [ "$got" = "registered" ] && ok || bad "script present but not registered"
+else
+  [ "$got" = "absent" ] && ok || bad "registered a hook for a missing script"
+fi
+
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
 [ "$FAIL" = "0" ] || exit 1
