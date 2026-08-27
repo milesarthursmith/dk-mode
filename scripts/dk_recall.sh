@@ -46,7 +46,11 @@ set -euo pipefail
 # DK_HOME wins over everything: a machine-wide install points every project
 # at one memory. Unset = per-project, as before.
 ROOT="${DK_HOME:-${CLAUDE_PROJECT_DIR:-$(pwd)}}"
-MEM="$ROOT/.claude/memory"
+# DK_MEM names the memory directory outright (plugin installs use
+# ${CLAUDE_PLUGIN_DATA}, which has no .claude/ layout of its own).
+MEM="${DK_MEM:-$ROOT/.claude/memory}"
+# A plugin install has no install.sh step, so seed on first use.
+bash "$(cd "$(dirname "$0")" && pwd)/dk_bootstrap.sh" "$MEM" 2>/dev/null || true
 RULES="$MEM/dk_rules.md"
 RAW="$MEM/dk.jsonl"
 STATE="$MEM/.dk_state"

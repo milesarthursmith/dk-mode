@@ -1253,6 +1253,89 @@ print(len(m.load_rules()))
 if [ "$infile" = "$loaded" ]; then ok
 else bad "$infile items in the file but the loader sees $loaded"; fi
 
+# --- 99-101: plugin install (no install.sh runs at all) ---------------------
+
+t "99. the plugin manifests are valid and point at files that exist"
+fails=""
+for f in ".claude-plugin/plugin.json" "hooks/hooks.json" ".claude-plugin/marketplace.json"; do
+  python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$REPO/$f" 2>/dev/null \
+    || fails="$fails $f:invalid-json"
+done
+# Every command in hooks.json must reference a script that is actually shipped.
+for s in $(python3 -c "
+import json, re
+h = json.load(open('$REPO/hooks/hooks.json'))
+for ev in h['hooks']:
+    for e in h['hooks'][ev]:
+        for k in e['hooks']:
+            m = re.search(r'CLAUDE_PLUGIN_ROOT\}/(\S+?)\"', k['command'])
+            if m: print(m.group(1))
+"); do
+  [ -f "$REPO/$s" ] || fails="$fails missing:$s"
+done
+if [ -z "$fails" ]; then ok; else bad "$fails"; fi
+
+t "100. a plugin install seeds and mines with no install.sh step"
+# Claude Code copies a plugin in and starts calling hooks. Nothing runs
+# install.sh, so the first hook has to create its own memory.
+sandbox; echo k > "$KEYF"
+PR="$SB/proot"; PD="$SB/pdata"
+mkdir -p "$PR"; cp -R "$REPO/scripts" "$REPO/templates" "$PR/"
+python3 - "$SB/pt.jsonl" <<'PYX'
+import json, sys
+rows = [
+ {"type": "assistant", "uuid": "p0", "isSidechain": False,
+  "timestamp": "2026-08-27T00:00:00Z",
+  "message": {"role": "assistant", "content": "Done, all tests pass."}},
+ {"type": "user", "uuid": "p1", "isSidechain": False,
+  "timestamp": "2026-08-27T00:01:00Z",
+  "message": {"role": "user", "content": "bit lame, did you actually run them"}},
+]
+open(sys.argv[1], "w").write("\n".join(json.dumps(r) for r in rows) + "\n")
+PYX
+start_watch_mock "ALL_USER"
+# The exact command string from hooks.json, not a paraphrase of it.
+CMD=$(python3 -c "
+import json
+h = json.load(open('$REPO/hooks/hooks.json'))
+print(h['hooks']['Stop'][0]['hooks'][0]['command'])")
+printf '{"transcript_path":"%s","session_id":"plugtest"}' "$SB/pt.jsonl" | \
+  env CLAUDE_PLUGIN_ROOT="$PR" CLAUDE_PLUGIN_DATA="$PD" HOME="$SB/home" \
+      DK_KEY_FILE="$KEYF" DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
+      bash -c "$CMD"
+for _ in $(seq 1 40); do [ -s "$PD/memory/dk.jsonl" ] && break; sleep 0.25; done
+stop_mock
+fails=""
+[ "$(grep -c '^### ' "$PD/memory/dk_rules.md" 2>/dev/null)" -ge 20 ] \
+  || fails="$fails no-baseline-seeded"
+grep -qF "did you actually run them" "$PD/memory/dk.jsonl" 2>/dev/null \
+  || fails="$fails nothing-mined"
+if [ -z "$fails" ]; then ok; else bad "$fails"; fi
+
+t "101. the plugin recall hook injects, and never touches the project directory"
+CMD=$(python3 -c "
+import json
+h = json.load(open('$REPO/hooks/hooks.json'))
+print(h['hooks']['UserPromptSubmit'][0]['hooks'][0]['command'])")
+PROJ="$SB/someproject"; mkdir -p "$PROJ"
+out=$(printf '{"prompt":"ship it","session_id":"plugtest"}' | \
+  env CLAUDE_PLUGIN_ROOT="$PR" CLAUDE_PLUGIN_DATA="$PD" HOME="$SB/home" \
+      CLAUDE_PROJECT_DIR="$PROJ" bash -c "$CMD")
+fails=""
+printf '%s' "$out" | grep -q "self-steering" || fails="$fails no-injection"
+# A plugin must not scatter memory into whatever repo happens to be open.
+[ -d "$PROJ/.claude" ] && fails="$fails wrote-into-the-project"
+if [ -z "$fails" ]; then ok; else bad "$fails; out: $out"; fi
+
+t "102. deleting the rules file disables dk-mode; the bootstrap does not undo it"
+# Self-seeding exists for a fresh plugin install. It must not resurrect a file
+# the user removed on purpose - deleting dk_rules.md is how you turn this off.
+sandbox
+rm -f "$RULES"                     # dk.jsonl remains: an existing install
+out=$(run_recall); rc=$?
+if [ ! -f "$RULES" ] && [ -z "$out" ] && [ "$rc" = "0" ]; then ok
+else bad "rules resurrected or output produced; rc=$rc out: [$out]"; fi
+
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
 [ "$FAIL" = "0" ] || exit 1

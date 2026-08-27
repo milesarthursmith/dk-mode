@@ -1,0 +1,11 @@
+{
+  "name": "dk-mode",
+  "displayName": "dk-mode",
+  "description": "Mines your past conversations for the corrections you keep repeating, then reminds Claude at the moment it is about to repeat the mistake. Ships 23 researched agent failure modes so it steers on day one.",
+  "version": "0.2.0",
+  "author": { "name": "milesarthursmith" },
+  "homepage": "https://github.com/milesarthursmith/dk-mode",
+  "repository": "https://github.com/milesarthursmith/dk-mode",
+  "license": "MIT",
+  "keywords": ["memory", "self-steering", "hooks", "failure-modes", "recall"]
+}

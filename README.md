@@ -66,6 +66,19 @@ you mine without a model, dk-mode finds almost nothing.
 
 ### 1. Install the code
 
+In Claude Code, type these two lines:
+
+```
+/plugin marketplace add milesarthursmith/dk-mode
+/plugin install dk-mode@dk-mode
+```
+
+That is the whole installation. The plugin carries its own hooks, its own
+`/dk-review` command, and its own memory, which lives beside the plugin and
+survives an update. There is no file to edit and no settings to merge.
+
+To install from a clone instead - for a single project, or to change the code:
+
 ```bash
 git clone https://github.com/milesarthursmith/dk-mode.git
 cd dk-mode
@@ -229,6 +242,7 @@ and dk-mode operates with no key.
 | `DK_TIMEOUT` | `180` / `600` | The number of seconds to wait. A local model is slower. |
 | `DK_LOG_DIR` | `~/Library/Logs` | The directory for the error logs. |
 | `--no-baseline` (install flag) | off | Start with no rules at all, instead of the 23 baseline failure modes. |
+| `DK_MEM` | — | The memory directory itself. The plugin sets it to its own data directory. It has priority over `DK_HOME`. |
 | `DK_HOME` | — | The directory that holds `.claude/memory`. `install.sh --global` sets it in the hooks. It has priority over the project. |
 | `DK_SESSION_ID` | — | Claude Code sets this variable. It keeps the reminders of one conversation separate from a different conversation. |
 

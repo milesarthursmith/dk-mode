@@ -64,7 +64,11 @@ def _target_arg():
 # how it behaves, not about which repo it is in. Unset = per-project, as before.
 ROOT = (_target_arg() or os.environ.get("DK_HOME")
         or os.environ.get("CLAUDE_PROJECT_DIR") or find_root(SCRIPT_DIR))
-MEM = os.path.join(ROOT, ".claude", "memory")
+# DK_MEM names the memory directory outright. A plugin install has no project
+# to hang .claude/memory off - its data lives in ${CLAUDE_PLUGIN_DATA}, which
+# survives plugin updates - so the directory is passed directly.
+MEM = (os.environ.get("DK_MEM")
+       or os.path.join(ROOT, ".claude", "memory"))
 RULES = os.path.join(MEM, "dk_rules.md")
 LOCK = os.path.join(MEM, ".dk-consolidate.lock")
 NOTE_MAX_ITEMS = 5

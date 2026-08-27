@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "DK_MEM=\"${CLAUDE_PLUGIN_DATA}/memory\" bash \"${CLAUDE_PLUGIN_ROOT}/scripts/dk_capture.sh\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "DK_MEM=\"${CLAUDE_PLUGIN_DATA}/memory\" bash \"${CLAUDE_PLUGIN_ROOT}/scripts/dk_recall.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
