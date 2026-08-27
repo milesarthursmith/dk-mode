@@ -34,7 +34,6 @@ new ones.
 | The `!` line it writes | **critic** | A component that evaluates work and returns a comment on it. The closest named method is **Reflexion**: a written criticism is added to the next attempt. dk-mode differs in one way. In Reflexion the agent criticises itself. Here a separate model does it. |
 | `dk.jsonl` and `dk_rules.md` | **episodic memory** | A store of specific past events, kept so they can change later behaviour. The term comes from Letta (formerly MemGPT) and from the Generative Agents work. |
 | `dk_consolidate.py` | **memory consolidation** | The work of turning many raw events into fewer durable rules. Letta calls an agent that does this while idle a **sleep-time agent**. |
-| The labeller in `dk_eval.py` | **LLM as a judge** | A model that scores work against written criteria. This is the correct name **here and nowhere else in dk-mode**. |
 
 ### 1.2 Three words this project does NOT use
 

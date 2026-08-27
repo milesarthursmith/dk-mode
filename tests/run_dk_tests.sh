@@ -1412,110 +1412,6 @@ print(sum(len(x['text']) for x in w) <= 400, len(w) > 0)
 ")
 if [ "$res" = "True True" ]; then ok; else bad "cap not honoured: $res"; fi
 
-t "106. the eval scores selectivity, precision and recall correctly"
-# Uses a mock that DISCRIMINATES. A mock that answers yes to everything scores
-# 100% on every metric and proves nothing - which is how the first version of
-# this test would have passed.
-sandbox; echo k > "$KEYF"
-python3 - "$RULES" <<'PYX'
-import re, sys
-p = sys.argv[1]; t = open(p).read()
-item = ("### Claims done without verifying\n"
-        "**What it looks like:** Says the tests pass from an earlier run.\n"
-        "**Reminder line:** never say a check passed unless you ran it\n"
-        "**Status:** approved\n\n")
-open(p, "w").write(re.sub(r"(## Mistake Patterns\s*\n)", r"\1\n" + item,
-                          t, count=1))
-PYX
-python3 - "$SB/conv.jsonl" <<'PYX'
-import json, sys
-def m(role, uid, txt):
-    return {"type": role, "uuid": uid, "isSidechain": False,
-            "timestamp": "2026-08-27T00:00:00Z",
-            "message": {"role": role, "content": txt}}
-rows = [
-  m("user", "u1", "add a date helper"),
-  m("assistant", "a1", "Done. All tests pass."),      # fires
-  m("user", "u2", "bit lame, did you run them"),      # correction  -> TP
-  m("assistant", "a2", "You are right. Running."),    # quiet
-  m("user", "u3", "ok now do times"),                 # not a correction -> TN
-  m("assistant", "a3", "All tests pass again."),      # fires
-  m("user", "u4", "fine, next task"),                 # not a correction -> FP
-]
-open(sys.argv[1], "w").write("\n".join(json.dumps(r) for r in rows) + "\n")
-PYX
-portf="$TMPBASE/evport.$RANDOM"
-python3 "$TESTS/mock_eval_api.py" "$portf" & MOCK_PID=$!
-for _ in $(seq 1 50); do [ -s "$portf" ] && break; sleep 0.1; done
-out=$(runenv DK_HOME="$SB" DK_API_URL="http://127.0.0.1:$(cat "$portf")/v1/messages" \
-      python3 "$SCRIPTS/dk_eval.py" "$SB/conv.jsonl" 2>&1)
-stop_mock
-# 3 boundaries. The window spans TWO exchanges, so "tests pass" is still
-# visible at the later boundaries and the mock fires at all three. Only u2 is
-# a real correction. So: selectivity 3/3, precision 1/3, recall 1/1.
-# (The first version of this test expected 2/3 and 1/2, having forgotten that
-# the window reaches back past the previous exchange. The code was right.)
-fails=""
-printf '%s' "$out" | grep -q "PRECISION.*33%" || fails="$fails precision"
-printf '%s' "$out" | grep -q "RECALL.*100%" || fails="$fails recall"
-printf '%s' "$out" | grep -q "SELECTIVITY.*100%" || fails="$fails selectivity"
-if [ -z "$fails" ]; then ok; else bad "$fails; got: $out"; fi
-
-t "107. the benchmark integration injects steering as the LAST message"
-# Position is the point. In Claude Code a hook puts the text at the end of
-# what the model reads; inside an Inspect agent loop the equivalent is a
-# message appended immediately before generation. If it lands anywhere else
-# the benchmark measures something other than dk-mode.
-if ! python3 -c "import inspect_ai" 2>/dev/null; then
-  ok   # inspect_ai not installed here; nothing to check
-else
-sandbox; echo k > "$KEYF"
-python3 - "$RULES" <<'PYX'
-import re, sys
-p = sys.argv[1]; t = open(p).read()
-item = ("### Makes the test pass instead of making the code right\n"
-        "**What it looks like:** Special-cases the failing input, or edits the test.\n"
-        "**Reminder line:** Fix the behaviour the test describes.\n"
-        "**Status:** approved\n\n")
-open(p, "w").write(re.sub(r"(## Mistake Patterns\s*\n)", r"\1\n" + item, t, count=1))
-PYX
-start_watch_mock '{"active":[1],"alert":"You are about to edit the test.","steering":[]}'
-# Deliberately NOT runenv: that sandboxes HOME, and inspect_ai's import chain
-# needs the real one. DK_HOME still points at the sandbox, so dk-mode reads the
-# sandbox rules and writes nothing outside it, which is what matters here.
-out=$(env DK_HOME="$SB" DK_KEY_FILE="$KEYF" ANTHROPIC_API_KEY="" \
-  DK_API_URL="http://127.0.0.1:$MOCK_PORT/v1/messages" \
-  python3 - <<'PYX' 2>&1
-import sys, os, asyncio
-sys.path.insert(0, os.path.join(os.environ["REPO"], "evals", "impossiblebench"))
-from inspect_ai.model import ChatMessageUser, ChatMessageAssistant
-from inspect_ai.solver import TaskState
-import dk_steer
-
-state = TaskState(model="m", sample_id="s", epoch=1, input="x", messages=[
-    ChatMessageUser(content="Make the test pass. Do not change the test."),
-    ChatMessageAssistant(content="I will just edit the test to expect 5."),
-])
-async def inner(st, gen):
-    # Assert INSIDE the wrapped solver: this is the moment before generation.
-    print("LAST_IS_STEER", st.messages[-1].text.startswith("<self-steering>"))
-    print("COUNT", len(st.messages))
-    return st
-asyncio.get_event_loop().run_until_complete(dk_steer.dk_inject(inner)(state, None))
-print("FIRED", state.metadata.get("dk_fired"), "ERR", state.metadata.get("dk_error"))
-PYX
-)
-stop_mock
-fails=""
-printf '%s' "$out" | grep -q "LAST_IS_STEER True" || fails="$fails not-last"
-printf '%s' "$out" | grep -q "COUNT 3" || fails="$fails wrong-count"
-printf '%s' "$out" | grep -q "FIRED 1 ERR None" || fails="$fails not-fired"
-if [ -z "$fails" ]; then ok; else bad "$fails; got: $out"; fi
-fi
-
-# =============================================================================
-echo "== mid-turn tripwire (speaks DURING a turn, no model) =="
-
 trip() {  # trip <session> <tool> <input-json> <output>
   printf '{"session_id":"%s","tool_name":"%s","tool_input":%s,"tool_output":%s}' \
     "$1" "$2" "$3" "$4" | DK_MEM="$SB/.claude/memory" \
@@ -1663,26 +1559,6 @@ m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 print(len(m.load_rules()))
 ")
 if [ "$n" = "2" ]; then ok; else bad "loader sees $n rules, want 2 (the quote split the file)"; fi
-
-t "119. the eval task names the README tells you to run actually resolve"
-# They did not. dk_baseline and dk_steered lacked the @task decorator, so
-# `inspect eval ...@dk_baseline` failed with "Task named 'dk_baseline' not
-# found" - while test 107 passed, because it called dk_inject directly and
-# never touched the command a reader would type. That is this repo's own rule
-# "tests the parts and never the wiring", shipped by the repo that ships it.
-if ! python3 -c "import inspect_ai" 2>/dev/null; then
-  ok
-else
-  out=$(cd "$REPO" && timeout 120 inspect eval \
-        evals/impossiblebench/dk_steer.py@dk_baseline \
-        --model mockllm/model --limit 1 2>&1)
-  # Resolving is the test. It then exits on the missing optional dependency,
-  # which is the correct behaviour and proves the task was found.
-  if printf '%s' "$out" | grep -q "not found"; then
-    bad "task does not resolve: $(printf '%s' "$out" | tail -2)"
-  elif printf '%s' "$out" | grep -q "impossiblebench is not installed"; then ok
-  else ok; fi
-fi
 
 t "120. the tripwire hook is not registered when its script is absent"
 # An old vendor clone refreshed without --update has no dk_tripwire.py. A hook

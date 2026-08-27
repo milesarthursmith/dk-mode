@@ -6,9 +6,6 @@ __pycache__/
 # redaction existed, so this must never be committable by accident.
 .claude/
 
-# `inspect eval` writes its run logs here by default.
-logs/
-
 .env
 *.log
 .DS_Store

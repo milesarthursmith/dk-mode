@@ -362,9 +362,5 @@ did not collect.
 
 ## More information
 
-- [docs/log.md](docs/log.md) — the development record and the measurements.
+- [docs/log.md](docs/log.md) — the development record.
 - [docs/MECHANISM.md](docs/MECHANISM.md) — the internal design.
-- [scripts/dk_eval.py](scripts/dk_eval.py) — measures whether the monitor
-  speaks at the right moments.
-- [evals/impossiblebench/](evals/impossiblebench/) — a public benchmark that
-  asks whether dk-mode reduces cheating.
