@@ -19,6 +19,16 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "DK_MEM=\"${CLAUDE_PLUGIN_DATA}/memory\" python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/dk_tripwire.py\""
+          }
+        ]
+      }
     ]
   }
 }

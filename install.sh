@@ -150,6 +150,14 @@ if [ -d "$VENDOR/skills/dk-review" ]; then
 fi
 
 # --- 3. hook registration ---------------------------------------------------
+# The mid-turn tripwire runs after every tool call, so it stays cheap: no
+# model, a few milliseconds, one small state file.
+if [ "$GLOBAL" = "1" ]; then
+  TRIP_CMD="DK_HOME=\"$HOME\" python3 \"$HOME/.claude/vendor/dk-mode/scripts/dk_tripwire.py\""
+else
+  TRIP_CMD="python3 \"\${CLAUDE_PROJECT_DIR}/.claude/vendor/dk-mode/scripts/dk_tripwire.py\""
+fi
+
 if [ "$GLOBAL" = "1" ]; then
   # $HOME is expanded NOW, not left for the shell: the hook runs with the
   # project as cwd, and ${CLAUDE_PROJECT_DIR} would point at whichever repo
@@ -183,12 +191,13 @@ registered=no
 merge_out=""
 if [ "$NO_HOOKS" = "1" ]; then
   :
-elif merge_out=$(SETTINGS="$SETTINGS" CAPTURE_CMD="$CAPTURE_CMD" RECALL_CMD="$RECALL_CMD" python3 - 2>&1 <<'PY'
+elif merge_out=$(SETTINGS="$SETTINGS" CAPTURE_CMD="$CAPTURE_CMD" RECALL_CMD="$RECALL_CMD" TRIP_CMD="$TRIP_CMD" python3 - 2>&1 <<'PY'
 import json, os, sys, tempfile
 
 path = os.environ["SETTINGS"]
 cap = {"hooks": [{"type": "command", "command": os.environ["CAPTURE_CMD"]}]}
 rec = {"hooks": [{"type": "command", "command": os.environ["RECALL_CMD"]}]}
+trip = {"hooks": [{"type": "command", "command": os.environ["TRIP_CMD"]}]}
 
 try:
     with open(path, encoding="utf-8") as f:
@@ -208,6 +217,9 @@ if not has_cmd(stop, os.environ["CAPTURE_CMD"]):
 ups = hooks.setdefault("UserPromptSubmit", [])
 if not has_cmd(ups, os.environ["RECALL_CMD"]):
     ups.append(rec); changed = True
+pt = hooks.setdefault("PostToolUse", [])
+if not has_cmd(pt, os.environ["TRIP_CMD"]):
+    pt.append(trip); changed = True
 
 if changed:
     d = os.path.dirname(path)

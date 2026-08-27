@@ -244,6 +244,43 @@ from outside.
 
 ---
 
+## 4.5 Speaking during a turn, not only before one
+
+Section 4 describes recall, which speaks when you press enter. That is not
+enough on its own.
+
+One turn can run for ten minutes and make 25 tool calls. Recall cannot reach
+inside it. The note it writes arrives on your NEXT prompt, which is ten
+minutes after the mistake - and a long turn that nobody is watching is exactly
+what dk-mode is for.
+
+So dk-mode has a second injection point. `dk_tripwire.py` runs on the
+`PostToolUse` hook, after every tool call, and it can add text to the tool
+result the agent is about to read.
+
+**It calls no model.** It cannot: one model call after every tool call would
+cost more than the work it watches. It does not need one, because the failure
+modes worth catching inside a turn have signatures a program can see:
+
+| Tripwire | What it detects | Why this one |
+|---|---|---|
+| Repeating | The same tool, with the same input, three times | MAST measured step repetition at 15.7%, the most common single failure mode. Detecting it is a hash comparison. |
+| Not converging | 12 reads or searches with nothing written. A write resets the count. | SWE-Bench Pro measured context overflow at 35.6% of one model's failures, and endless file reading at 17.0%. |
+| Editing a test | A test file changed after a test command failed in the same turn | An analysis of top SWE-Bench entries found 19.78% of "solved" cases were semantically wrong. |
+
+Each tripwire speaks **at most once per turn**. A warning repeated after every
+tool call is noise, and noise is the failure this whole project exists to
+prevent.
+
+Change the thresholds with `DK_TRIP_REPEATS` (default 3) and `DK_TRIP_READS`
+(default 12).
+
+**This part is not yet proven.** The tripwires are tested and they fire
+correctly on their signatures. What has not been observed is Claude Code
+actually delivering `additionalContext` into a live turn.
+
+---
+
 ## 5. The miner: how the selection is made
 
 Recall only prints a file. This section explains who writes that file.

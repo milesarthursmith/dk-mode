@@ -1513,6 +1513,81 @@ printf '%s' "$out" | grep -q "FIRED 1 ERR None" || fails="$fails not-fired"
 if [ -z "$fails" ]; then ok; else bad "$fails; got: $out"; fi
 fi
 
+# =============================================================================
+echo "== mid-turn tripwire (speaks DURING a turn, no model) =="
+
+trip() {  # trip <session> <tool> <input-json> <output>
+  printf '{"session_id":"%s","tool_name":"%s","tool_input":%s,"tool_output":%s}' \
+    "$1" "$2" "$3" "$4" | DK_MEM="$SB/.claude/memory" \
+    python3 "$SCRIPTS/dk_tripwire.py"
+}
+
+t "108. the same call three times trips, and trips only once"
+sandbox
+a=$(trip r1 Grep '{"pattern":"foo"}' '"none"')
+b=$(trip r1 Grep '{"pattern":"foo"}' '"none"')
+c=$(trip r1 Grep '{"pattern":"foo"}' '"none"')
+d=$(trip r1 Grep '{"pattern":"foo"}' '"none"')
+fails=""
+[ -n "$a$b" ] && fails="$fails fired-too-early"
+printf '%s' "$c" | grep -q "additionalContext" || fails="$fails did-not-fire"
+printf '%s' "$c" | grep -q "PostToolUse" || fails="$fails wrong-event-name"
+[ -n "$d" ] && fails="$fails fired-twice"
+if [ -z "$fails" ]; then ok; else bad "$fails"; fi
+
+t "109. reading without writing trips; a write resets the count"
+sandbox
+for i in $(seq 1 12); do
+  out=$(trip r2 Read "{\"file_path\":\"/f$i\"}" '"x"')
+done
+printf '%s' "$out" | grep -q "without changing anything" || bad "no converge warning"
+# A write clears it: the next 11 reads must stay quiet.
+sandbox
+for i in $(seq 1 11); do trip r3 Read "{\"file_path\":\"/f$i\"}" '"x"' >/dev/null; done
+trip r3 Edit '{"file_path":"/a.py"}' '"ok"' >/dev/null
+q=""
+for i in $(seq 1 11); do q="$q$(trip r3 Read "{\"file_path\":\"/g$i\"}" '"x"')"; done
+if printf '%s' "$out" | grep -q "without changing anything" && [ -z "$q" ]; then ok
+else bad "reset failed; q=$q"; fi
+
+t "110. editing a test after a test failed trips"
+sandbox
+trip r4 Bash '"pytest tests/"' '"2 failed\nAssertionError"' >/dev/null
+out=$(trip r4 Edit '{"file_path":"tests/test_math.py"}' '"ok"')
+# Editing a NON-test file after a failure must stay quiet - that is the fix.
+sandbox
+trip r5 Bash '"pytest tests/"' '"2 failed\nAssertionError"' >/dev/null
+q=$(trip r5 Edit '{"file_path":"src/math.py"}' '"ok"')
+if printf '%s' "$out" | grep -q "editing a test file" && [ -z "$q" ]; then ok
+else bad "out=$out q=$q"; fi
+
+t "111. ordinary work trips nothing at all"
+sandbox
+q=$(trip r6 Read '{"file_path":"/a"}' '"x"')
+q="$q$(trip r6 Edit '{"file_path":"/a"}' '"ok"')"
+q="$q$(trip r6 Bash '"pytest"' '"3 passed"')"
+q="$q$(trip r6 Grep '{"pattern":"x"}' '"1 match"')"
+if [ -z "$q" ]; then ok; else bad "fired on normal work: $q"; fi
+
+t "112. malformed input never breaks the turn"
+sandbox
+out=$(echo 'not json at all' | DK_MEM="$SB/.claude/memory" \
+      python3 "$SCRIPTS/dk_tripwire.py" 2>&1); rc=$?
+if [ "$rc" = "0" ] && [ -z "$out" ]; then ok; else bad "rc=$rc out=$out"; fi
+
+t "113. the installer registers the tripwire on PostToolUse"
+sandbox
+PROJ="$SB/tw"; mkdir -p "$PROJ"
+(cd "$REPO" && DK_REPO_URL="file:///nope-$$" bash install.sh --target "$PROJ" >/dev/null 2>&1)
+got=$(python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+pt = d.get('hooks', {}).get('PostToolUse', [])
+print('yes' if any('dk_tripwire' in h.get('command','')
+                   for e in pt for h in e.get('hooks', [])) else 'no')
+" "$PROJ/.claude/settings.json" 2>/dev/null)
+if [ "$got" = "yes" ]; then ok; else bad "not registered"; fi
+
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
 [ "$FAIL" = "0" ] || exit 1
