@@ -81,6 +81,14 @@ SESSION = (os.environ.get("DK_SESSION_ID", "") or "")[:16] or "nosession"
 # into another's under the header "relevant to what you are doing right now".
 # Concurrent chats on one repo is the normal case, not an edge case.
 ACTIVE = os.path.join(MEM, f".dk_active.{SESSION}")
+# The running brief: what this conversation is FOR. The window is two
+# exchanges, about 3,000 characters of a conversation that may run to
+# megabytes, so without this the monitor judges a snapshot. Nine of the 23
+# shipped rules cannot be judged from a snapshot at all - "repeats a step
+# already taken", "ignores a stated constraint", "solves a different problem",
+# "forgets a decision made earlier" all need the arc.
+BRIEF = os.path.join(MEM, f".dk_brief.{SESSION}")
+BRIEF_MAX = int(os.environ.get("DK_BRIEF_CHARS", "1200"))
 LOCK = os.path.join(MEM, ".dk-watch.lock")
 STATE = os.path.join(MEM, ".dk_state")
 
@@ -186,6 +194,40 @@ def read_key():
 def field(block, name):
     m = re.search(r"\*\*" + name + r":\*\*\s*(.+)", block)
     return m.group(1).strip() if m else ""
+
+
+def first_request(msgs):
+    """The first thing the user actually asked, copied from the transcript.
+
+    This is never model-written. A brief re-summarised from the previous brief
+    drifts: by turn fifty the goal has quietly become something else, which is
+    the exact failure the brief exists to catch. So the one line that matters
+    most is re-derived from the transcript every time, and only the mutable
+    lines are left to the model.
+    """
+    for m in msgs:
+        if m["role"] == "user" and m["text"].strip():
+            return m["text"].strip().replace("\n", " ")[:300]
+    return ""
+
+
+def load_brief():
+    try:
+        with open(BRIEF, encoding="utf-8") as f:
+            return f.read()[:BRIEF_MAX]
+    except OSError:
+        return ""
+
+
+def save_brief(text, msgs):
+    """Write the brief back, with GOAL forced to the real first request."""
+    if not text:
+        return
+    lines = [ln for ln in text.splitlines()
+             if ln.strip() and not ln.strip().startswith("GOAL:")]
+    goal = first_request(msgs)
+    out = ("GOAL: " + goal + "\n" + "\n".join(lines))[:BRIEF_MAX]
+    atomic_write(BRIEF, out)
 
 
 def load_rules():
@@ -322,6 +364,17 @@ def _read_messages(path):
 PROMPT = """You do two jobs on one conversation between a coding agent and \
 its user. Answer with JSON only, no prose, no code fences.
 
+You are given a BRIEF: what this conversation is for, and where it has got
+to. The recent messages are only the last two exchanges, so the brief is the
+only thing that tells you the arc. Use it. A step repeated, a constraint
+ignored, a decision forgotten and a different problem solved are all invisible
+without it.
+
+JOB 3 - update the brief. Return it with the same short labelled lines. Keep
+what still holds, add what this turn established, drop what is settled and no
+longer needed. Do not write a GOAL line: it is copied from the first message
+and you cannot change it. Under 1000 characters.
+
 JOB 1 - which rules are live RIGHT NOW. Not which are true in general: which \
 this situation is about to run into, from what the agent just said and what \
 the user just asked. Live means about to claim something is finished, about \
@@ -353,7 +406,11 @@ steering, because it implies the work is wrong.
 
 {{"active": [ids], "alert": "..." or null,
  "steering": [{{"id": "<message id>", "source": "human|self",
-               "kind": "correction|instruction|preference"}}]}}
+               "kind": "correction|instruction|preference"}}],
+ "brief": "CONSTRAINTS: ...\nDECIDED: ...\nTRIED: ...\nOPEN: ..."}}
+
+=== BRIEF ===
+{brief}
 
 === RULES ===
 {rules}
@@ -590,7 +647,9 @@ def parse_selection(text, rules):
     steering = data.get("steering")
     if not isinstance(steering, list):
         steering = []
-    return active[:MAX_ACTIVE], alert, steering
+    brief = data.get("brief")
+    brief = brief[:2000] if isinstance(brief, str) else ""
+    return active[:MAX_ACTIVE], alert, steering, brief
 
 
 def render(active_ids, alert, rules):
@@ -672,6 +731,7 @@ def main():
             for w in windows:
                 text = call_model(key, PROMPT.format(
                     max_active=MAX_ACTIVE, rules="(none - capture only)",
+                    brief="(none - mining history, not a live conversation)",
                     convo="\n\n".join(
                         f'[{m["role"]} id={m["uuid"]}] {m["text"]}' for m in w)))
                 if not text:
@@ -683,8 +743,10 @@ def main():
                                             os.path.join(MEM, "log.md"))
             print(f"semantic: {total} entries from {len(windows)} windows")
             return 0
+        brief_in = load_brief() or "(nothing yet - this is the first turn)"
         text = call_model(key, PROMPT.format(
             max_active=MAX_ACTIVE,
+            brief=brief_in,
             rules=("\n".join(f'{r["id"]}. {r["heading"]} - {r["looks_like"]}'
                              for r in rules) or "(none yet - skip the first job)"),
             convo="\n\n".join(
@@ -700,6 +762,11 @@ def main():
         if parsed is None:
             mark(False, f"unparseable response: {text[:200]!r}")
             return 0                   # malformed: leave the old file to expire
+        # The brief is written every turn: it is what lets the next turn see
+        # the arc rather than a snapshot. GOAL is re-derived, never trusted
+        # from the model, so the goal cannot drift as the brief is rewritten.
+        save_brief(parsed[3], convo)
+
         # Write whenever there is anything to say, or when a previous
         # selection needs clearing. Gating this on `rules` alone threw away
         # the alert - which is generated from the conversation and needs no

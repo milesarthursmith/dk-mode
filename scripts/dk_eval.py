@@ -141,6 +141,7 @@ def main():
                                 for m in window)
             text = W.call_model(W.read_key(), W.PROMPT.format(
                 max_active=W.MAX_ACTIVE,
+        brief=W.load_brief() or "(none)",
                 rules="\n".join(f'{r["id"]}. {r["heading"]} - {r["looks_like"]}'
                                 for r in rules),
                 convo=convo))
