@@ -63,8 +63,14 @@ def main():
                     help="optional file/slug/PR the steering was about")
     args = ap.parse_args()
 
-    root = os.environ.get("CLAUDE_PROJECT_DIR") or find_root(SCRIPT_DIR)
-    mem = os.path.join(root, ".claude", "memory")
+    # DK_MEM/DK_HOME first, exactly as every other script resolves memory. This
+    # was the one script that ignored both, so under a global or plugin install
+    # it wrote its events to a dk.jsonl that nothing ever consolidated.
+    mem = os.environ.get("DK_MEM")
+    if not mem:
+        root = (os.environ.get("DK_HOME")
+                or os.environ.get("CLAUDE_PROJECT_DIR") or find_root(SCRIPT_DIR))
+        mem = os.path.join(root, ".claude", "memory")
     raw = os.path.join(mem, "dk.jsonl")
     lock = os.path.join(mem, ".dk.lock")
     if not os.path.isdir(mem):

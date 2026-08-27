@@ -27,7 +27,11 @@ failure modes worth catching mid-turn have deterministic signatures:
 Each tripwire fires AT MOST ONCE per turn. A warning repeated after every tool
 call is noise, and noise is the failure this project exists to prevent.
 
-State lives in one small file per session, cleared when a turn ends.
+State lives in one small file per session. dk_capture.sh deletes it on the Stop
+hook, which is what makes "once per turn" true. Without that deletion the
+counters run for the whole session: a tripwire would fire once and stay silent
+for every later loop, and 12 reads spread over five unrelated turns would
+report as one turn that never converged.
 
 Register it (the plugin does this for you):
     PostToolUse -> dk_tripwire.py

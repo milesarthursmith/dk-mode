@@ -172,6 +172,7 @@ fi
 # strings contain literal quotes, which must appear as \" inside JSON).
 CAPTURE_JSON="$(printf '%s' "$CAPTURE_CMD" | sed 's/"/\\"/g')"
 RECALL_JSON="$(printf '%s' "$RECALL_CMD" | sed 's/"/\\"/g')"
+TRIP_JSON="$(printf '%s' "$TRIP_CMD" | sed 's/"/\\"/g')"
 
 MANUAL_BLOCK=$(cat <<EOF
 Add to the "hooks" object of $SETTINGS
@@ -180,6 +181,9 @@ Add to the "hooks" object of $SETTINGS
     "Stop": [
       ...existing entries...,
       { "hooks": [ { "type": "command", "command": "$CAPTURE_JSON" } ] }
+    ],
+    "PostToolUse": [
+      { "hooks": [ { "type": "command", "command": "$TRIP_JSON" } ] }
     ],
     "UserPromptSubmit": [
       { "hooks": [ { "type": "command", "command": "$RECALL_JSON" } ] }

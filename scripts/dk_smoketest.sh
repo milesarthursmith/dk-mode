@@ -19,6 +19,7 @@
 #   bash scripts/dk_smoketest.sh --keep          # leave the scratch dir behind
 #
 # A model is required. Set one of:
+#   DK_BACKEND=cli           uses the `claude` login you already have. No key.
 #   DK_API_KEY=sk-...        or  DK_KEY_FILE=/path/to/a/file/holding/the/key
 #   DK_BACKEND=openai DK_API_URL=... DK_API_KEY=...      (OpenRouter)
 #   DK_BACKEND=openai DK_API_URL=http://localhost:11434/v1/chat/completions
@@ -32,10 +33,17 @@ while [ $# -gt 0 ]; do
     --count) COUNT="$2"; shift 2 ;;
     --keep) KEEP=1; shift ;;
     --transcripts) PROJECTS="$2"; shift 2 ;;
-    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+
+# The strongest safety claim in this file is that it cannot touch your real
+# memory. That was only true when DK_HOME and DK_MEM were unset: both outrank
+# the scratch project this script passes down, so a user with a global install
+# exported in their shell would have mined into their real dk.jsonl. Clear them
+# before anything else runs.
+unset DK_HOME DK_MEM
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(dirname "$SCRIPT_DIR")"

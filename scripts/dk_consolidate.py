@@ -516,7 +516,11 @@ def auto_approve(text):
         return re.sub(r"(\*\*Status:\*\*\s*)pending", r"\1approved",
                       block, count=1)
 
-    retired_at = text.find("## Retired")
+    # Anchored heading, not a substring: dk_review.py had exactly this bug and
+    # documents the fix. A rule whose Evidence quotes "## Retired" would
+    # otherwise split the document at the quotation.
+    _rm = re.search(r"^## Retired\s*$", text, re.M)
+    retired_at = _rm.start() if _rm else -1
     head = text if retired_at < 0 else text[:retired_at]
     tail = "" if retired_at < 0 else text[retired_at:]
     head = re.sub(r"^### .*?(?=^### |^## |\Z)", bump, head, flags=re.M | re.S)

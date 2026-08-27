@@ -58,6 +58,13 @@ TRANSCRIPT="$(printf '%s' "$PAYLOAD" | grep -o '"transcript_path"[[:space:]]*:[[
 # static note. The runtime monitor produced answers nothing ever read.
 SESSION="$(printf '%s' "$PAYLOAD" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:[[:space:]]*"//; s/"$//' || true)"
 
+# A turn just ended, so the mid-turn tripwire counters reset here. This is the
+# only place that knows where a turn stops. Without it dk_tripwire.py counts
+# for the whole session: each tripwire would fire once and never again, and
+# reads from unrelated turns would add up into a false warning.
+SESSION_SHORT="$(printf '%s' "${DK_SESSION_ID:-$SESSION}" | cut -c1-16)"
+rm -f "$MEM/.dk_trip.${SESSION_SHORT:-nosession}" 2>/dev/null || true
+
 # Nothing may sit between here and the launch. Anything that can exit early
 # above the miner is the bug described in the header.
 if [ "$SCAN_LINES" != "0" ] && [ "${DK_WATCH:-1}" != "0" ]; then

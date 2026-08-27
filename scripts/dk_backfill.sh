@@ -60,7 +60,12 @@ while IFS= read -r -d '' t; do
   # One path only. The phrase-matching pass that used to run alongside this
   # was deleted: it found 0 of 46 real corrections, and its early exit gated
   # the reading pass it was supposed to complement.
-  sem=$(CLAUDE_PROJECT_DIR="$TARGET" python3 "$SCRIPT_DIR/dk_watch.py" \
+  # DK_HOME must be set, not just CLAUDE_PROJECT_DIR: the miner ranks DK_HOME
+  # and DK_MEM ABOVE CLAUDE_PROJECT_DIR, so --target was silently ignored for
+  # anyone with a global install exported in their shell, and the entries went
+  # to the wrong memory.
+  sem=$(DK_HOME="$TARGET" DK_MEM="" CLAUDE_PROJECT_DIR="$TARGET" \
+          python3 "$SCRIPT_DIR/dk_watch.py" \
           --capture-only "$t" 2>/dev/null | sed -n 's/^semantic: \([0-9]*\).*/\1/p')
   semantic_total=$((semantic_total + ${sem:-0}))
 done < <(find "$TRANSCRIPTS" -name '*.jsonl' -type f -print0)

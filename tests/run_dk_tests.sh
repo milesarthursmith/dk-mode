@@ -1588,6 +1588,82 @@ print('yes' if any('dk_tripwire' in h.get('command','')
 " "$PROJ/.claude/settings.json" 2>/dev/null)
 if [ "$got" = "yes" ]; then ok; else bad "not registered"; fi
 
+t "114. the Stop hook clears tripwire state, so 'once per turn' is true"
+# Without this the counters run for the whole session: a tripwire fires once
+# and stays silent for every later loop, and reads from unrelated turns add up
+# into a false warning. The doc claimed once-per-turn; the code did not.
+sandbox
+fire() {
+  printf '{"session_id":"tw1","tool_name":"Grep","tool_input":{"p":"x"},"tool_output":"none"}' \
+    | DK_MEM="$SB/.claude/memory" python3 "$SCRIPTS/dk_tripwire.py"
+}
+for _ in 1 2 3; do a=$(fire); done
+printf '{"transcript_path":"/dev/null","session_id":"tw1"}' \
+  | env CLAUDE_PROJECT_DIR="$SB" HOME="$SB/home" DK_WATCH=0 bash "$SCRIPTS/dk_capture.sh"
+for _ in 1 2 3; do b=$(fire); done
+if [ -n "$a" ] && [ -n "$b" ]; then ok
+else bad "turn1=$([ -n "$a" ] && echo fired || echo no) turn2=$([ -n "$b" ] && echo fired || echo no)"; fi
+
+t "115. dk_signal.py honours DK_MEM and DK_HOME like every other script"
+# It was the only script that ignored both, so a global or plugin install wrote
+# its events to a dk.jsonl nothing ever consolidated.
+sandbox
+python3 "$SCRIPTS/dk_signal.py" --text "the deploy gate rejected this" \
+  --source ci >/dev/null 2>&1 <<< "" || true
+n1=0
+DK_MEM="$SB/.claude/memory" python3 "$SCRIPTS/dk_signal.py" \
+  --text "gate rejected this" --source ci >/dev/null 2>&1
+n1=$(lines "$RAW")
+OTHER="$SB/other"; mkdir -p "$OTHER/.claude/memory"; : > "$OTHER/.claude/memory/dk.jsonl"
+DK_HOME="$OTHER" python3 "$SCRIPTS/dk_signal.py" \
+  --text "lint keeps failing" --source lint >/dev/null 2>&1
+n2=$(lines "$OTHER/.claude/memory/dk.jsonl")
+if [ "$n1" -ge 1 ] && [ "$n2" -ge 1 ]; then ok
+else bad "DK_MEM=$n1 DK_HOME=$n2 (want both >=1)"; fi
+
+t "116. the smoke test cannot mine into a real memory via an exported DK_HOME"
+# Its strongest safety claim was conditional: DK_HOME and DK_MEM outrank the
+# scratch project it passes down.
+if grep -q '^unset DK_HOME DK_MEM' "$SCRIPTS/dk_smoketest.sh"; then ok
+else bad "smoketest does not clear DK_HOME/DK_MEM before running"; fi
+
+t "117. a manual install is told about all three hooks, not two"
+# The printed fallback listed Stop and UserPromptSubmit only, so anyone whose
+# settings file could not be written automatically silently got no tripwire.
+sandbox
+PROJ="$SB/mf"; mkdir -p "$PROJ/.claude"; echo 'not valid json' > "$PROJ/.claude/settings.json"
+out=$(cd "$REPO" && DK_REPO_URL="file:///nope-$$" bash install.sh --target "$PROJ" 2>&1)
+fails=""
+printf '%s' "$out" | grep -q "dk_tripwire" || fails="$fails no-tripwire"
+printf '%s' "$out" | grep -q "dk_capture"  || fails="$fails no-capture"
+printf '%s' "$out" | grep -q "dk_recall"   || fails="$fails no-recall"
+if [ -z "$fails" ]; then ok; else bad "$fails"; fi
+
+t "118. a quoted '## Retired' in evidence does not split the rules file"
+# dk_review.py documents this bug as fixed; dk_consolidate.py still had it.
+sandbox
+python3 - "$RULES" <<'PYX'
+import re, sys
+p = sys.argv[1]; t = open(p).read()
+item = ('### Rule whose evidence quotes a heading\n'
+        '**What it looks like:** something\n'
+        '**Reminder line:** do the thing\n'
+        '**Evidence:** User: "put it under ## Retired please"\n'
+        '**Status:** approved\n\n'
+        '### A later rule that must still be visible\n'
+        '**What it looks like:** something else\n'
+        '**Reminder line:** do the other thing\n'
+        '**Status:** approved\n\n')
+open(p, "w").write(re.sub(r"(## Mistake Patterns\s*\n)", r"\1\n" + item, t, count=1))
+PYX
+n=$(CLAUDE_PROJECT_DIR="$SB" python3 -c "
+import importlib.util
+spec = importlib.util.spec_from_file_location('w', '$SCRIPTS/dk_watch.py')
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print(len(m.load_rules()))
+")
+if [ "$n" = "2" ]; then ok; else bad "loader sees $n rules, want 2 (the quote split the file)"; fi
+
 echo
 echo "$PASS passed, $FAIL failed  (total $((PASS + FAIL)))"
 [ "$FAIL" = "0" ] || exit 1
