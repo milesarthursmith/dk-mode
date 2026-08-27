@@ -1,201 +1,325 @@
 # How dk-mode works
 
-Every number here was measured on 2026-08-27, on a real install. Where a
-figure is a worst case rather than a typical one, it says so.
+This document uses Simplified Technical English (ASD-STE100). It explains the
+mechanism to a reader who has not seen this repository before.
 
 ---
 
-## The problem
+## 1. The words in this document
 
-Claude cannot look up "times I was lazy" *before* being lazy. Noticing your
-own in-progress failure is the capability that is failing. So a memory tool
-the model chooses to call is useless here: it gets called when the model
-already suspects it needs memory, which is not the moment that matters.
+Read this section first. The rest of the document uses these words with
+exactly these meanings.
 
-dk-mode therefore does not offer a tool. It puts text into the prompt whether
-the model wanted it or not.
+| Word | Meaning |
+|---|---|
+| **the prompt** | All the text Claude reads before it answers you. Your message is only one part of it. |
+| **a turn** | One message from you, and Claude's answer to it. |
+| **a hook** | A command that Claude Code runs for you at a fixed moment. You do not start it. It starts itself. |
+| **the transcript** | The file that holds a whole conversation. Claude Code writes one for every conversation, on your computer. |
+| **a rule** | One known way that Claude goes wrong, with a short line that says what to do instead. |
+| **to mine** | To read old conversations and find the corrections in them. |
+| **the miner** | The part of dk-mode that mines. |
+| **recall** | The part of dk-mode that puts text into the prompt. |
+| **the sorter** | The part of dk-mode that turns mined corrections into rules. |
 
 ---
 
-## The three moving parts
+## 2. What dk-mode does, in three sentences
+
+Claude forgets your corrections when a conversation ends.
+
+dk-mode reads your old conversations and finds the corrections you make again
+and again.
+
+Then it puts the correct one back in front of Claude, at the moment Claude is
+about to make the same mistake again.
+
+---
+
+## 3. Why it does not use a tool
+
+Claude cannot decide to look up "times I was lazy" **before** it is lazy. To
+see your own mistake while you make it is the ability that has failed. A tool
+that Claude chooses to call is therefore no use here. Claude calls it only
+when Claude already knows it needs help.
+
+So dk-mode gives Claude no tool. It puts the text into the prompt, and Claude
+has no choice about that.
+
+This is the whole idea. Section 4 explains how.
+
+---
+
+## 4. Recall: how text gets into the prompt
+
+This is the central mechanism. Read this section carefully.
+
+### 4.1 The rule that makes it possible
+
+Claude Code has a hook called `UserPromptSubmit`. It runs after you press
+enter, and before Claude reads anything.
+
+**Whatever that hook prints is added to the prompt.** Claude then reads your
+message and the printed text together. Claude cannot skip the printed text,
+and it cannot forget to look for it.
+
+dk-mode registers one script on that hook: `dk_recall.sh`. Everything else in
+this repository exists to decide what that script prints.
+
+### 4.2 What the script does
+
+The script reads two files and prints. It calls no model. It uses no network.
+It takes a few milliseconds. It always exits with code 0, so it can never stop
+your turn.
+
+It looks for these two files, in this order:
+
+1. **`.dk_active.<session-id>`** — the live selection. The miner wrote this
+   file at the end of your previous turn. It holds only the rules that apply
+   to what is happening now.
+2. **`dk_rules.md`** — the standing note. It holds the five most important
+   rules. The sorter writes it. The script uses this file only if the first
+   file is absent, or if the first file is more than one hour old.
+
+An **empty** live selection is a real answer, not a missing one. It means no
+rule applies to this turn, so the script prints nothing. This is the normal
+result.
+
+### 4.3 What the printed text looks like
+
+When a rule applies, Claude reads this immediately before your message:
 
 ```
-        ┌────────────────────────── your turn ends ──────────────────────────┐
-        │                                                                    │
-   you type ──▶ RECALL ──▶ Claude answers ──▶ MINER ──▶ (writes a file)      │
-                  ▲            │                 │                           │
-                  │            │                 ├──▶ dk.jsonl   (what you said)
-                  │            │                 └──▶ .dk_active (what applies now)
-                  │            │                                             │
-                  └────────────┴───────── reads both files ──────────────────┘
-
-                   once a week ──▶ SORTER ──▶ dk_rules.md
+<self-steering>
+Relevant to what you are doing right now:
+! You just said the tests pass. You did not run them this turn.
+* Claims done without verifying
+    what it looks like: Says the tests pass based on an earlier run.
+    so: never say a check passed unless you ran it this turn
+</self-steering>
 ```
 
-**RECALL** runs on the `UserPromptSubmit` hook, before Claude sees your
-message. It reads two files and prints. No model call, no network. Whatever it
-prints is added to the prompt.
+That block is a copy of a real run, not an example written by hand.
 
-**MINER** runs on the `Stop` hook, after Claude finishes. It calls a model
-once. It does two jobs in that one call, and writes two files.
+Four parts:
 
-**SORTER** runs occasionally, by default every 7 days. It reads what the miner
-collected and turns it into rules.
+- The line that starts with `!` is the **alert**. It names what Claude is
+  about to do wrong, in this conversation. The model writes this line.
+- The line that starts with `*` is the **name of the rule** that applies.
+- The line `what it looks like:` describes the mistake.
+- The line `so:` says what to do instead.
 
-The miner runs *after* your turn, not during it. Its answer is used by the
-*next* prompt. That is why nothing here adds latency: you are never waiting on
-a model call.
+The last three lines are a copy from `dk_rules.md`. The model selected the
+rule by its number. It did not write those words.
+
+When nothing applies, Claude reads nothing. This is important. A rule that
+appears on every turn becomes background text, and Claude stops reading it. A
+rule that appears only when it applies stays a real interruption.
+
+### 4.4 The warnings
+
+The script also prints one line when something is wrong:
+
+- No corrections mined for 21 days. The miner may be dead.
+- Items wait for your approval.
+- The miner or the sorter failed its last three runs.
+
+The last one exists because a broken miner and a quiet miner look the same
+from outside.
 
 ---
 
-## What the miner is sent
+## 5. The miner: how the selection is made
 
-One call per turn. The prompt has three parts:
+Recall only prints a file. This section explains who writes that file.
 
-| Part | Size | Changes each turn? |
+### 5.1 When it runs
+
+The miner runs on the `Stop` hook. That hook runs after Claude finishes its
+answer — that is, **after your turn, not during it**.
+
+This matters. The miner calls a model, and a model call takes seconds. You
+never wait for it. It writes its answer to a file, and the **next** prompt
+reads that file.
+
+So the miner is always one turn behind. This is correct: it judges the turn
+that just finished.
+
+### 5.2 What it is sent
+
+The miner makes one model call per turn. The call has three parts:
+
+| Part | Size | Does it change each turn? |
 |---|---|---|
-| Instructions | 467 tokens | No |
-| The rules, listed with ids | 868 tokens at 23 rules | Only when rules change |
-| The conversation window | up to 2,250 tokens | Yes |
-| **Total** | **up to ~3,600 tokens** | |
+| The instructions | 467 tokens | No |
+| The rules, each with a number | 868 tokens for 23 rules | Only when a rule changes |
+| The recent messages | up to 2,250 tokens | Yes |
+| **Total** | **up to about 3,600 tokens** | |
 
-### The conversation window - "the 6 turns"
+**The recent messages.** The setting `DK_WATCH_TURNS` controls this, and its
+default is **6**. This means the last **6 messages**, not 6 turns. Your
+message and Claude's answer are two messages, so 6 messages is about your last
+three turns.
 
-`DK_WATCH_TURNS`, default **6**. It means the last **6 messages** of the
-conversation, not 6 exchanges - a user message and Claude's reply are two
-messages, so 6 is roughly your last three exchanges.
+Each message is cut at 1,500 characters. So this part is at most 9,000
+characters, which is about 2,250 tokens. Usually it is much less.
 
-Each message is truncated at 1,500 characters, so the window is at most
-9,000 characters, about 2,250 tokens. Usually far less.
-
-Why 6: the miner is judging what is happening *right now*. A rule is live
+The number is 6 because the miner judges what happens **now**. A rule applies
 because of what Claude just said and what you just asked. Older messages
-describe a situation that has moved on, and they cost tokens on every single
-turn. Raise it with `DK_WATCH_TURNS` if your work has longer arcs; the cost
-is linear.
+describe a situation that has changed. They also cost tokens on every turn.
+Increase `DK_WATCH_TURNS` if your work has longer arcs. The cost increases at
+the same rate.
 
-Messages are filtered before the model sees any of them. Discarded:
-`isSidechain` (subagent conversations), `isMeta` (harness-injected turns that
-say "user" but you never typed), and anything containing a harness marker
-such as `<command-name>`, `<system-reminder>`, `<local-command-stdout>` or
-`<task-notification>`. Without this the miner reports the harness talking to
-itself as your correction. That is not hypothetical - it happened.
+**The rules.** Each rule is sent as `number. name - what it looks like`. The
+model needs the description to judge. The names alone are four times smaller,
+but too vague to judge from.
 
-### The rules list
+The setting `DK_MAX_RULES` limits this, and its default is **40**. A limit is
+necessary: the miner only ever adds rules, so without a limit this part grows
+for ever. At 100 rules it is about 3,800 tokens, on every turn, permanently.
+When the limit applies, dk-mode keeps the rules mined from you and drops the
+supplied baseline rules. Your rules are about you.
 
-Each rule is sent as `id. heading - what it looks like`. The model needs the
-description to judge relevance; headings alone are 4x smaller but too vague
-to judge from.
+### 5.3 What it is not sent
 
-Capped at `DK_MAX_RULES`, default **40**. Mining only ever adds rules, so
-without a cap the prompt grows forever - 100 rules would be ~3,800 tokens on
-every turn. When the cap bites, rules mined from you beat the shipped
-baseline ones: yours are about you.
+A transcript contains text that looks like your words but is not. Claude Code
+writes harness messages with the role "user". dk-mode removes all of these
+before the model sees them:
 
----
+- Messages marked `isSidechain`. These belong to a subagent, not to you.
+- Messages marked `isMeta`. The role says user, but you did not type them.
+- Messages that contain a harness marker, such as `<command-name>`,
+  `<system-reminder>`, `<local-command-stdout>` or `<task-notification>`.
 
-## What the miner does with it
+This is not a theoretical risk. Before this filter was complete, a real run
+recorded `<local-command-stdout>Set model to ...</local-command-stdout>` as a
+correction from the user.
 
-**Job 1 - relevance.** Which rules are live *right now*. Not which are true
-in general. It returns **ids only** and at most 3. The script looks those ids
-up and writes the rendered text to `.dk_active.<session-id>`.
+dk-mode also removes anything that looks like a password or a key. People
+paste keys into conversations. A real run mined a live key before this was
+added.
 
-Most turns the answer is an empty list. That is the intended behaviour: a
-rule that appears on every turn is wallpaper by turn 40; a rule that appears
-at the moment it applies is a challenge.
+### 5.4 The two jobs
 
-**Job 2 - mining.** Which messages steered the agent. It returns **message
-ids only**. The script looks each id up in the transcript and copies your
-words verbatim into `dk.jsonl`, along with the three messages before it, so a
-correction is stored with the thing it was correcting.
+The miner does two jobs in that one model call.
 
-**A model in dk-mode can point at things. It cannot write them.** Both jobs
-return ids. The text always comes from a file or a transcript. If a model
-invents an id, the lookup misses and the entry is dropped.
+**Job 1 — which rules apply now.** The model gets the numbered list of rules.
+It answers with **numbers only**, and at most three. The script reads those
+numbers, finds the matching rules, and writes the text to
+`.dk_active.<session-id>`. Recall prints that file on your next turn.
 
-Anything resembling a credential is removed before writing.
+Most turns the answer is an empty list. This is the intended result.
 
----
+**Job 2 — which messages corrected the agent.** The model reads the recent
+messages. It answers with **message identifiers only**. The script finds each
+message in the transcript and copies your words exactly into `dk.jsonl`. It
+also copies the three messages before yours, so a correction is stored
+together with the thing it corrected.
 
-## What recall prints
+### 5.5 The safety rule
 
-Two tiers:
+**A model in dk-mode can point at text. It cannot write text.**
 
-1. `.dk_active.<session-id>`, written by the miner one turn ago, if it is
-   less than `DK_ACTIVE_TTL` seconds old (default 3600). **An empty-but-fresh
-   file is a real answer** - nothing applies, so nothing is printed.
-2. If that file is absent or stale, the static note from `dk_rules.md` - the
-   five most important rules, pre-rendered by the sorter.
+Both jobs answer with identifiers. All text comes from a file or from the
+transcript. If the model invents an identifier, nothing matches it, and
+dk-mode discards it.
 
-Plus, when they apply: a line if nothing has been mined for 21 days, a line if
-items are waiting for review, and a line if the miner or the sorter has failed
-three times running. The last one exists because a broken miner and a quiet
-miner look identical from the outside.
-
-Recall never calls a model and never blocks. Every path exits 0.
+This matters because a model does not usually fail by getting one word wrong.
+It fails by writing a whole quotation that reads correctly and never happened.
 
 ---
 
-## The sorter
+## 6. The sorter: how corrections become rules
 
-Runs at `DK_INTERVAL` (default 7 days), in the background, kicked by recall
-when it is due. It reads the unprocessed entries in `dk.jsonl` and rewrites
-`dk_rules.md`: merging repeats and bumping their count, filing standing
-instructions and durable facts, discarding one-offs, and re-rendering the
-five-line static note.
+The sorter runs every 7 days by default. Change this with `DK_INTERVAL`.
+Recall starts it in the background when it is due.
 
-It must quote your actual words as evidence. Its output is structurally
-checked before it replaces anything, and `dk.jsonl` is never modified - so a
-bad sort can always be redone.
+It reads the new entries in `dk.jsonl` and rewrites `dk_rules.md`. It:
 
-With `DK_APPROVAL=1` new rules land as `pending` and are held out of the
-prompt until you approve them with `/dk-review`. With `auto` a rule approves
-itself once it has recurred `DK_AUTO_APPROVE_COUNT` times.
+- joins repeated corrections into one rule, and increases its count;
+- files a standing instruction, or a durable fact, under its own heading;
+- discards a correction that happened only once;
+- rewrites the five-line standing note that recall uses as its second choice.
+
+It must quote your words as evidence. dk-mode checks the structure of its
+output before that output replaces anything. It never changes `dk.jsonl`, so a
+bad sort can always be done again.
+
+If you set `DK_APPROVAL=1`, a new rule waits with the status `pending`.
+dk-mode holds it out of the prompt until you approve it with `/dk-review`. If
+you set `auto`, a rule approves itself after it occurs `DK_AUTO_APPROVE_COUNT`
+times.
 
 ---
 
-## The files
+## 7. One turn, from start to end
+
+This is the same mechanism again, in time order.
+
+1. You type a message and press enter.
+2. The `UserPromptSubmit` hook runs `dk_recall.sh`.
+3. The script reads `.dk_active.<session-id>`, written at the end of your last
+   turn. It prints what that file holds. Usually the file is empty and the
+   script prints nothing.
+4. Claude reads the printed text and your message together, and answers.
+5. Claude finishes. The `Stop` hook runs `dk_capture.sh`, which starts
+   `dk_watch.py` in the background and returns immediately.
+6. `dk_watch.py` sends the last 6 messages and the rule list to a model.
+7. The model answers with two lists of numbers.
+8. The script writes the applicable rules to `.dk_active.<session-id>`, and
+   any new corrections to `dk.jsonl`.
+9. Your next turn starts at step 1, and step 3 reads what step 8 wrote.
+
+You never wait for step 6. It happens after your turn ends.
+
+---
+
+## 8. The files
 
 | File | What it is |
 |---|---|
-| `dk.jsonl` | Every mined correction, in your words. Append-only. Do not read it by hand; it grows without limit. |
-| `dk_rules.md` | The sorted rules, and the pre-rendered note. Readable, editable. Delete a rule you disagree with. |
-| `.dk_active.<session>` | This conversation's live selection. Rewritten every turn, per session so one chat's verdict never leaks into another. |
-| `.dk_state` | Scheduling and failure counts. |
+| `dk.jsonl` | Every mined correction, in your words. dk-mode only adds to it. Do not read it by hand: it grows without limit. |
+| `dk_rules.md` | The sorted rules, and the standing note. Read it. Change it. Delete a rule you disagree with. |
+| `.dk_active.<session>` | The live selection for one conversation. Rewritten every turn. It is per conversation, so one conversation's answer never appears in another. |
+| `.dk_state` | Timing, and counts of failures. |
 
-Delete `dk_rules.md` to switch dk-mode off. Nothing recreates it.
+**To switch dk-mode off, delete `dk_rules.md`.** Nothing creates it again.
 
 ---
 
-## What it costs
+## 9. What it costs
 
-Per turn, up to ~3,600 tokens in and a few hundred out. At 100 turns a day:
+Up to about 3,600 tokens in, and a few hundred out, for each turn. At 100
+turns each day:
 
-| Backend | Per month |
+| Model | Each month |
 |---|---|
-| `DK_BACKEND=cli` | nothing - uses your existing Claude login |
-| Haiku 4.5 | ~$16 |
-| Sonnet 5 | ~$31 |
+| `DK_BACKEND=cli` | nothing. It uses the Claude login you already have. |
+| Haiku 4.5 | about $16 |
+| Sonnet 5 | about $31 |
 
-The per-turn call is a **strictness test**, not a summary. On most turns the
-right answer is "no rule applies", and a weak model says yes too often. That
-fills every prompt with rules that do not apply, which is the exact failure
-dk-mode exists to prevent. Measure a cheap model on your own conversations
-before trusting it.
+The per-turn call is a test of strictness, not a summary. On most turns the
+correct answer is "no rule applies". A weak model answers "yes" too often.
+Then every prompt fills with rules that do not apply, and that is the exact
+failure dk-mode exists to prevent. Measure a cheap model on your own
+conversations before you trust it.
 
-The sorter is a different job: rare, and real judgement. Leave `DK_MODELS`
-at the default.
+The sorter is a different job. It runs rarely and it makes real judgements.
+Leave `DK_MODELS` at its default.
 
 ---
 
-## What is not proven
+## 10. What is not proven
 
-- **Selectivity is asserted, not measured.** "Most turns select nothing" is
-  the assumption the whole design rests on. Nobody has counted.
+- **Nobody has measured how often a rule is selected.** "Most turns select
+  nothing" is the assumption the whole design rests on. It has never been
+  counted.
 - The first real run mined 13 items from 3 conversations. 10 were real
-  corrections; 3 were plain instructions misread as corrections. The prompt
-  has since been tightened, and that fix is untested.
-- The test suite cannot judge prompt quality. It checks plumbing. Whether the
-  model judges *well* can only be seen by running it and reading the output.
+  corrections. 3 were ordinary instructions, read wrongly as corrections. The
+  instructions to the model were then made stricter, and that change is not
+  yet tested against real conversations.
+- **The tests cannot judge the quality of a model's answer.** They check that
+  the parts connect and that the data is correct. Whether the model judges
+  *well* is visible only when you run it and read the result.
 
-`docs/log.md` has the development history and the measurements behind these.
+`docs/log.md` holds the development history and the measurements.
