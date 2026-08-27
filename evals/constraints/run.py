@@ -264,28 +264,40 @@ def main_watched(out_path=None):
 
 
 def main_scale(out_path=None):
-    """The test that separates selection from echoing.
+    """Does dk-mode find the ONE rule that matters, out of 200?
 
-    Echoing works when there is one instruction to echo. A real session
-    accumulates hundreds - dk_rules.md only ever grows, which is why
-    DK_MAX_RULES exists - and at that size echoing is not a design anyone can
-    choose. It costs thousands of tokens every turn, and it buries the one
-    rule that matters inside a wall the model reads the way it reads a config
-    file: not at all.
+    This is the only question that matters for the product. dk-mode does not
+    echo a memory file back at the model - it picks the relevant rule and
+    injects that. So the pool here is the 200 instructions themselves, the way
+    a real dk_rules.md is the accumulated record of what the user has said.
+    Selecting from anything else would be testing a pool that cannot contain
+    the right answer.
 
-    So three arms, and the middle one is included to be shown impossible:
+    Three arms:
       baseline   nothing.
-      echo-all   all 200 instructions, every turn. Cost is recorded.
-      dk-mode    picks at most three.
+      echo-all   all 200 instructions, every turn. Cost recorded.
+      dk-mode    picks at most MAX_ACTIVE.
 
-    If echo-all is both expensive AND no better, selection is the only option
-    and the question becomes whether dk-mode selects well. If echo-all wins,
-    dk-mode is a costly way to do something a paste does better, and that is
-    the finding.
+    Two numbers come out, and the second is the product:
+      1. did the agent break the rule
+      2. did dk-mode SELECT the rule the bait targets
+    A miss on (2) is a selection failure whatever the agent happened to do.
     """
     case = json.load(open(os.path.join(HERE, "scale_case.json")))
-    rules = W.load_rules()
     inst = case["instructions"]
+
+    # The 200 instructions ARE the rules. Shape them exactly as load_rules()
+    # does so the shipped prompt, cap and renderer all behave normally.
+    pool = [{"id": i + 1, "mined": True, "heading": s, "looks_like": s,
+             "reminder": s, "evidence": ""} for i, s in enumerate(inst)]
+    dropped = max(0, len(pool) - W.MAX_RULES)
+    rules = list(pool)
+    if len(rules) > W.MAX_RULES:            # same cap the monitor applies
+        rules = rules[:W.MAX_RULES]
+        for i, r in enumerate(rules, 1):
+            r["id"] = i
+    kept = {r["heading"] for r in rules}
+
     echo = "<reminder>\n" + "\n".join("! " + i for i in inst) + "\n</reminder>"
     echo_tokens = len(echo) // 4
 
@@ -297,59 +309,93 @@ def main_scale(out_path=None):
 
     brief = "GOAL: follow the project rules above while doing the work."
     rows, dk_tokens = [], []
+    print("pool: %d instructions, %d reach the model (DK_MAX_RULES=%d), "
+          "%d dropped\n" % (len(pool), len(rules), W.MAX_RULES, dropped))
     for bait in case["baits"]:
         conv = msgs + [("user", bait["prompt"])]
         rx = re.compile(bait["violation"], re.I)
+        target = bait["target_text"]
         base = ask_agent(conv, "")
         allr = ask_agent(conv, echo)
-        inject, _ = steer_for(conv, rules, brief)
+        inject, parsed = steer_for(conv, rules, brief)
         dk = ask_agent(conv, inject)
         dk_tokens.append(len(inject) // 4)
-        row = {"id": bait["id"],
+        by_id = {r["id"]: r["heading"] for r in rules}
+        picked = [by_id[i] for i in (parsed[0] if parsed else [])]
+        row = {"id": bait["id"], "target": target,
+               "reachable": target in kept,
+               "picked": picked,
+               "found": target in picked,
                "base": bool(rx.search(base)) if base else None,
                "echo": bool(rx.search(allr)) if allr else None,
                "dk": bool(rx.search(dk)) if dk else None,
                "dk_cost": len(inject) // 4}
         rows.append(row)
         f = lambda v: "BROKE" if v else ("held" if v is False else "?")
-        print("%-14s base %-6s echo-all %-6s dk %-6s   (dk cost %d tok)"
+        print("%-14s base %-6s echo-all %-6s dk %-6s   selected-right: %s  "
+              "(dk cost %d tok)"
               % (bait["id"], f(row["base"]), f(row["echo"]), f(row["dk"]),
-                 row["dk_cost"]))
+                 "YES" if row["found"] else "no", row["dk_cost"]))
+        if not row["found"]:
+            print("%-14s wanted: %s" % ("", target))
+            print("%-14s picked: %s" % ("", "; ".join(picked) or "(nothing)"))
 
     ok = [r for r in rows if r["base"] is not None]
     b = sum(1 for r in ok if r["base"])
     e = sum(1 for r in ok if r["echo"])
     d = sum(1 for r in ok if r["dk"])
+    found = sum(1 for r in rows if r["found"])
+    unreachable = sum(1 for r in rows if not r["reachable"])
     avg_dk = sum(dk_tokens) // max(1, len(dk_tokens))
-    print("\n%d baits.  broken by: baseline %d, echo-all %d, dk-mode %d"
+
+    print("\nSELECTION (the product)")
+    print("  right rule found: %d of %d" % (found, len(rows)))
+    if unreachable:
+        print("  %d target(s) were cut by the %d-rule cap before selection ran"
+              % (unreachable, W.MAX_RULES))
+    print("\nOUTCOME")
+    print("  %d baits.  broken by: baseline %d, echo-all %d, dk-mode %d"
           % (len(ok), b, e, d))
     print("\nCOST PER TURN")
     print("  echo-all : %5d tokens  (%d instructions, every turn, forever)"
           % (echo_tokens, len(inst)))
-    print("  dk-mode  : %5d tokens injected, plus ~870 to choose from 40 rules"
+    print("  dk-mode  : %5d tokens injected, plus the pick itself"
           % avg_dk)
     print("  ratio    : echoing costs %.0fx what dk-mode injects"
           % (echo_tokens / max(1, avg_dk)))
-    if b == 0:
-        print("\nBaseline broke nothing. The baits are too weak to conclude.")
+
+    print("")
+    if found < len(rows) / 2:
+        print("dk-mode failed to find the right rule most of the time. The "
+              "selection\nstep is the weak link, not the injection. Report it "
+              "that way.")
+    elif b == 0:
+        print("Baseline broke nothing. The baits are too weak to conclude "
+              "anything\nabout the outcome, though the selection number "
+              "still stands.")
     elif d < e:
-        print("\ndk-mode broke fewer than echoing everything, at %.0fx less "
-              "cost.\nSelection beats volume here." % (echo_tokens / max(1, avg_dk)))
+        print("dk-mode broke fewer than echoing everything, at %.0fx less "
+              "cost." % (echo_tokens / max(1, avg_dk)))
     elif d == e:
-        print("\nSame outcome, but echoing costs %.0fx more per turn and grows "
-              "with every\nnew rule. Selection is the only one that scales."
-              % (echo_tokens / max(1, avg_dk)))
+        print("Same outcome, but echoing costs %.0fx more per turn and grows "
+              "with\nevery new rule." % (echo_tokens / max(1, avg_dk)))
     else:
-        print("\nEchoing everything did BETTER. dk-mode's selection is the "
+        print("Echoing everything did BETTER. dk-mode's selection is the "
               "weak link.\nReport it that way.")
+
     if out_path:
         with open(out_path, "w", encoding="utf-8") as f2:
-            f2.write("# Selection vs echoing, at %d instructions\n\n"
-                     "echo-all costs %d tokens per turn; dk-mode injects ~%d.\n\n"
-                     % (len(inst), echo_tokens, avg_dk))
+            f2.write("# Selection at %d instructions\n\n"
+                     "%d reach the model (cap %d), %d dropped.\n"
+                     "echo-all costs %d tokens per turn; dk-mode injects ~%d.\n"
+                     "Right rule selected: %d of %d.\n\n"
+                     % (len(pool), len(rules), W.MAX_RULES, dropped,
+                        echo_tokens, avg_dk, found, len(rows)))
             for r in rows:
-                f2.write("- **%s** base=%s echo-all=%s dk=%s\n"
-                         % (r["id"], r["base"], r["echo"], r["dk"]))
+                f2.write("- **%s** base=%s echo-all=%s dk=%s selected-right=%s\n"
+                         "    - wanted: %s\n    - picked: %s\n"
+                         % (r["id"], r["base"], r["echo"], r["dk"], r["found"],
+                            r["target"], "; ".join(r["picked"]) or "(nothing)"))
     return 0
 
 
