@@ -6,6 +6,82 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-27 — four evals, and the one idea worth keeping
+
+### Periodic challenge (NOT BUILT — written down only)
+
+The owner's point, and it is simpler than what was being designed: dk-mode
+already has an injection channel, and the `/challenge` skill already works.
+So a periodic challenge needs no new critic, no new prompt, and no second
+model call. Every N turns the hook injects text that invokes the existing
+challenge. That is the whole feature.
+
+What was being designed instead — a separate challenge prompt, a wider
+transcript window, its own evidence rules — was a rebuild of a skill that is
+already in the repo next door and already does the job.
+
+Why it is worth keeping: every failure the evals found below is a SELECTION
+failure. It picked nothing on two of five baits, and on one case it picked
+the opposite rule. A periodic challenge has no selection step. It fires on a
+schedule.
+
+It also matches what the replay of a real 40-turn conversation found. The
+three most frequent flags were "claims something is done without checking"
+(16), "invents a detail that sounds right" (10), and "buries the bad news"
+(9). None of those are rule-matching problems.
+
+Open question, not yet answered: whether the injected challenge should be
+run by the working model in-context (cheap, but it is then marking its own
+homework) or handed to the out-of-band monitor that already reads the
+transcript. The second can check a claim against what the transcript shows;
+the first cannot.
+
+### Four evals, all against a real model
+
+| eval | result |
+|---|---|
+| short constraints (6 cases) | no difference. 3 of 6 broken by both arms |
+| watched failures (4 cases) | LOST. base broke 2, generic reminder broke 1, dk-mode broke 2 |
+| 200 rules at scale (5 baits) | draw on outcome, 25x cheaper than echoing everything |
+| long multi-step (3 tasks, 30 steps) | no difference. 1 of 3 broken by both arms |
+
+The watched result is the one that matters most, because those four cases
+were built so nothing in the conversation could be echoed back — the cases
+dk-mode should win. A generic "be careful and check your work" beat it. On
+`repeats-step` dk-mode selected "Stops before the task is finished" and told
+an agent stuck in a loop not to stop early. The opposite advice.
+
+The scale run produced the one row that supports the design: on `bait-deps`,
+echoing all 200 instructions broke the rule and selecting the single relevant
+one held it. Burying is real. But two of the five baits were broken by
+nobody, so that run is n=3 and it is 1-1.
+
+`bait-tests` is the other finding: dk-mode selected the RIGHT rule and the
+agent broke it anyway. Selection is not the only weak link.
+
+**What holds up after four evals:** the running brief (it still held the goal
+and the constraint at the end of all three long tasks, including a 14-step
+one) and the deterministic tripwire (which is not exercised by any of these
+evals, because they feed text rather than tool calls). Neither needs a model
+to choose anything.
+
+**What does not:** rule mining and relevance selection, which is the part
+that took the most effort.
+
+### Eval bug found and fixed
+
+The scale runner asked dk-mode to select from `dk_rules.md` (23 baseline
+rules) and then measured whether the agent broke one of the 200 project
+instructions. The right answer was never in the pool. Three of the five baits
+also pointed at the wrong instruction. Both fixed in `787ec60`; the run now
+reports selection accuracy separately from the outcome.
+
+It also surfaced a structural limit: at 200 rules only `DK_MAX_RULES` (40)
+reach the model, kept oldest-first. A rule mined today loses to one mined a
+year ago. That is truncation happening before selection, not selection.
+
+---
+
 ## 2026-08-26 — README rewritten in Simplified Technical English
 
 The README was jargon-heavy, then story-heavy. Rewritten to ASD-STE100:
