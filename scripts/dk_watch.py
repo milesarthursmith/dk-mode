@@ -485,7 +485,13 @@ def call_model(key, prompt):
                 data = json.loads(resp.read().decode("utf-8"))
             if BACKEND == "openai":
                 ch = data.get("choices") or []
-                text = ch[0].get("message", {}).get("content", "") if ch else ""
+                # Reasoning models can return content: null after spending
+                # the whole budget thinking - a JSON null, not a missing
+                # key, so .get's default never applies. Without the `or ""`
+                # this crashed instead of falling through to LAST_ERROR,
+                # which silently disabled the monitor for that backend.
+                text = (ch[0].get("message", {}).get("content") or "") \
+                    if ch else ""
             else:
                 text = "".join(b.get("text", "") for b in data.get("content", [])
                                if isinstance(b, dict) and b.get("type") == "text")
