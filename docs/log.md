@@ -6,6 +6,73 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-28 — why it fires 92% of the time: a diagnosis from the logs, for free
+
+The run's JSON already holds every rule the monitor picked and every alert
+it wrote, so the diagnosis cost nothing. 1,407 rule selections across 693
+generations - two per turn. The tally:
+
+    441  Claims something is done without checking
+    263  Ignores a constraint that was stated in the task
+    248  Stops before the task is finished
+    200  Repeats a step already taken
+    108  Skims instead of reading
+
+Three causes, all visible in the prompt and the tally.
+
+**1. The monitor is not hallucinating - and that is the problem.** The
+alerts are specific and mostly TRUE: "Agent claimed tests pass without
+actually running them" is exactly what baseline does on 95% of samples.
+Detection works. What dk-mode lacks is any memory of having already spoken:
+it said "claims done without checking" 441 times. There is no dedup, no
+cooldown, no "I told it this two turns ago and nothing has changed, so shut
+up." The brief carries the arc of the conversation but is never used to
+suppress a repeat. Accurate narration delivered every turn is nagging, and
+the traces show what nagging costs: the named behaviours did not improve
+(never_tested 0.95 -> 0.85, unverified_done -> 1.00) while repeats rose 86%
+and re-reads 3.5x - each injection ("view test.py first", "run the tests")
+triggers actions without changing the destination.
+
+**2. Two of the top rules are trivially live mid-task.** "Stops before the
+task is finished" is true at every intermediate step of honest work - the
+task IS unfinished. "About to claim done without checking" is satisfied by
+the entire trajectory of an agent that tests rarely. The prompt asks which
+rules the situation "is about to run into"; mid-task, for these rules, the
+honest answer is almost always yes. The liveness question needs a sharper
+test than "about to", or those rules need to be exchange-level only.
+
+**3. The cadence is 30x the design's.** dk_watch's prompt is written for
+the Stop hook - once per user exchange: "what the agent just said and what
+the user just asked". The eval asks it before every generation, ~35 times
+per sample, per EVALS.md 2.4's per-tool-call channel. The port was correct
+about where injection must happen in a benchmark, but the monitor prompt
+was carried over unchanged to a cadence it was never written for. Note the
+flip side: at the shipped cadence a benchmark sample has ONE user exchange,
+so the shipped dk-mode would have fired roughly once per task, at the end.
+Neither extreme is the tool working as intended.
+
+**A harness gap found while checking this.** The injected payloads are
+absent from the logged transcript: inspect records model input above the
+ModelAPI layer where the patch appends, so the text reaches the provider
+(the counters and billing prove it) but the .eval file shows the
+conversation without it. Selections and alerts are logged in metadata; the
+interleaving is not. Until the payloads are recorded per generation there
+is no way to read a trace and see injection -> reaction side by side, which
+is exactly the reading EVALS.md 2.5 demands. Fix before the next paid run.
+
+**What this means for the design.** The selection layer, as shipped, is a
+competent detector with no throttle. At 92% fire rate it degenerates into
+the scheduled challenge plus a model call - strictly worse than its own
+dumb control. The interesting question was never "can it spot the
+failure" but "can it speak rarely enough to be heard." That is now the
+climb: add said-already suppression, make always-true-mid-task rules
+exchange-level, and re-measure the fire rate at the same cadence. All of
+that is tunable offline against the recorded baseline traces with the
+monitor on the free CLI backend, so the next iteration costs nothing until
+the confirmation run.
+
+---
+
 ## 2026-08-28 — the first completed comparison: no effect on outcome, worse behaviour
 
 Gemini 2.5 Flash Lite as the agent under test (40x cheaper than Haiku, which
