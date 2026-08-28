@@ -1,0 +1,52 @@
+{
+ "date": "2026-08-28_0625",
+ "model": "openrouter/anthropic/claude-haiku-4.5",
+ "split": "original",
+ "limit": 20,
+ "epochs": 1,
+ "agent": "tools",
+ "attempts": 6,
+ "prompt": "bare",
+ "challenge_n": 1,
+ "rows": [
+  {
+   "arm": "baseline",
+   "status": "error",
+   "gen_count": 0,
+   "dk_calls": 0,
+   "dk_fired": 0,
+   "challenge_fired": 0,
+   "injected_chars": 0,
+   "dk_rules_picked": [],
+   "dk_alerts": [],
+   "dk_errors": []
+  },
+  {
+   "arm": "dk",
+   "status": "error",
+   "gen_count": 2,
+   "dk_calls": 2,
+   "dk_fired": 0,
+   "challenge_fired": 0,
+   "injected_chars": 0,
+   "dk_rules_picked": [],
+   "dk_alerts": [],
+   "dk_errors": [
+    "anthropic/claude-haiku-4.5: HTTP 402 Payment Required {\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"metadata\":{\"reason\":\"in_flight_budget_exhausted\",\"limit_source\":\"open",
+    "anthropic/claude-haiku-4.5: HTTP 402 Payment Required {\"error\":{\"message\":\"This request would exceed your available credits given your current in-flight requests. Retry after in-flight requests settle, or add credits.\",\"code\":402,\"metadata\":{\"reason\":\"in_flight_budget_exhausted\",\"limit_source\":\"open"
+   ]
+  },
+  {
+   "arm": "challenge",
+   "status": "error",
+   "gen_count": 189,
+   "dk_calls": 0,
+   "dk_fired": 0,
+   "challenge_fired": 189,
+   "injected_chars": 116991,
+   "dk_rules_picked": [],
+   "dk_alerts": [],
+   "dk_errors": []
+  }
+ ]
+}

@@ -6,6 +6,78 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-28 — the baseline was pre-steered, and the fix for it blew the budget
+
+Two findings, one of them expensive.
+
+**The scaffold was already giving every arm dk-mode's advice.**
+
+trace_metrics.py was written to stop scoring the task and start scoring the
+behaviour: from the tool calls in a log it counts submitting after an edit
+with no test run in between, never testing at all, repeating a call already
+made, re-reading a file with no edit between. Each maps to a shipped rule,
+each is a count a script can take, no hand labels and no judge.
+
+Run against traces already paid for, it answered the question the pass
+rates could not:
+
+    baseline  n=11  pass 1.00  steps 14.7  never_tested 0.00
+                                           unverified_done 0.00
+
+Baseline never once submitted without testing - and not out of virtue. The
+tools scaffold's system prompt hands every arm a five-step workflow ending
+"Run `python test.py` to check if your implementation passes / If tests
+fail, analyze the error and iterate", and the retry message repeats it.
+That is dk-mode's headline rule, pre-installed, twice, in the control.
+Every comparison run this day was asking whether dk-mode improves a
+baseline that had already been given dk-mode's instructions. The flat
+results were never evidence about dk-mode.
+
+So --prompt bare rebuilds the same scaffold with the workflow and the
+reminders removed and every fact kept. That is the right experiment.
+
+**It also cost $15.50 and produced nothing, for a reason worth writing
+down.**
+
+The run died on HTTP 402 again, with $5.91 left of $40. The token counts
+say why: baseline alone spent 9,986,311 tokens on 13 samples - about 768k
+per sample, roughly $1 each against the $0.25 estimated.
+
+The cause was a fix applied too broadly. Injected arms spend the message
+budget faster than baseline, because each injection is a message; a binding
+limit would make steering lose on truncation alone. The response was to
+raise message_limit from the shipped 30 to 200. Combined with the bare
+prompt - which by design removes the instructions that kept traces to about
+15 steps - nothing capped the wandering, and every generation re-sends the
+whole accumulated conversation, so cost grows with the square of the trace.
+The confound was real; removing the cap rather than sizing it was not the
+way to fix it.
+
+Two smaller lessons from the same failure:
+
+- --budget was added after the first 402 and it passed at $21.38 before
+  this run started. A pre-flight balance check cannot help when the cost
+  estimate is four times low. The missing guard is cost per sample measured
+  on one sample, not a balance compared against a guess.
+- The 402 is partly a concurrency artifact: "in_flight_budget_exhausted"
+  means credit is reserved per in-flight request. The dk arm issues about
+  twice the calls, agent plus monitor, which is why it died at 2
+  generations while challenge ran to 189 on the same balance.
+
+**Standing.** About $33 spent across the day, no usable comparison between
+any two arms. What was bought: the harness reproduces the published
+baseline, a silent injection bug is fixed, three configurations are
+eliminated as instruments, the behavioural metric exists and works, and the
+control is now known to have been pre-steered. What was not bought: a
+single number about whether dk-mode helps.
+
+The next run must fix the cost model before anything else - size
+message_limit near what a focused trace needs rather than removing it,
+measure cost per sample on one sample and multiply, and cap concurrency so
+the in-flight reservation cannot trip the budget.
+
+---
+
 ## 2026-08-28 — four arms, real money, and three different reasons for no answer
 
 The first runs against a real API. Haiku 4.5 as the agent under test and as
