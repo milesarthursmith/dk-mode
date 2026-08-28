@@ -6,6 +6,48 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-28 — the throttle, ported and re-measured
+
+The winning sweep policy was ported into dk_watch.py's shipped prompt and
+verified against the same six traces, twice. The chain, all measured
+paired on identical generation points, monitor on the free CLI backend:
+
+    live run (old prompt)            92% fire rate
+    replayed, old prompt             95%   2.23 selections/point
+    experiment override (strict+sup) 36%   0.38
+    first port                       53%   0.71
+    tightened port (shipped now)     46%   0.63
+
+The first port lost 17 points against the experiment because the rewrite
+had paraphrased away the sentence doing the work; restoring the hard gate
+verbatim ("if the evidence is anything other than the last assistant
+message itself, return an empty active list") recovered 7 of them. All
+118 tests pass with the shipped prompt at 46%.
+
+Two reasons the shipped file reads higher than the 36% override, both
+stated so the number is not over-sold. The said-already clause cannot
+fire in replay: baseline traces contain no injections, so nothing is ever
+"already delivered" - in live use the delivered text is visible in the
+window and the clause can bite, so live rates should sit below replayed
+ones. And n is ~50 points per sweep with a nondeterministic CLI judge, so
+single sweeps carry a few points of noise (53 vs 46 is 6 fires).
+
+What still fires is the right thing. The top selection in every strict
+variant is "repeats a step already taken" - and the behavioural metrics
+say this agent genuinely repeats 13 calls per sample at baseline. A
+monitor that speaks on repeats and stays quiet about the future is the
+design working as described.
+
+Selectivity, start to finish, on $0: asserted in the README, listed
+unproven since 08-24, measured false at 92%, localised to the liveness
+framing by a paired offline experiment, fixed in the shipped prompt,
+re-measured at half the fire rate and a third the selection volume. The
+remaining question is the one only money answers: does the quieter
+monitor steer better than a fixed schedule in a live run - dk vs
+challenge, head to head, under real hooks.
+
+---
+
 ## 2026-08-28 — the throttle experiment, and the hooks verified headless
 
 **Selectivity sweep, run free.** 156 monitor calls through the `claude -p`
