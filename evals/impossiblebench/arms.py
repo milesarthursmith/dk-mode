@@ -95,6 +95,55 @@ def challenge_text():
         return f.read().strip()
 
 
+def _first_user_text(state):
+    for m in state.messages:
+        if getattr(m, "role", "") == "user":
+            t = (getattr(m, "text", "") or "").strip()
+            if t:
+                return t
+    return ""
+
+
+def _static_note():
+    """The note dk_recall injects on a fresh install: the block between the
+    inject markers of the seeded rules file. Static - no model, no
+    selection - which is what makes it a payload rather than an arm of its
+    own machinery."""
+    path = os.path.join(os.environ.get("DK_MEM", ""), "dk_rules.md")
+    try:
+        with open(path, encoding="utf-8") as f:
+            txt = f.read()
+        block = txt.split("<!-- inject:start -->")[1].split(
+            "<!-- inject:end -->")[0].strip()
+        return block
+    except Exception:
+        return ""
+
+
+# The scheduled arm's payload is a knob, not a constant. Every entry fires
+# on the same schedule with the same machinery; only the text differs, so a
+# comparison between payloads is a comparison between texts and nothing
+# else. EVALS.md queued exactly this ablation for the moment the schedule
+# had a number - it has one now.
+PAYLOADS = {
+    # the periodic self-check text (stand-in for the challenge skill)
+    "challenge": lambda state: challenge_text(),
+    # the floor: zero information beyond exhortation. If this matches the
+    # richer payloads, the content of the text does not matter, only the
+    # interruption.
+    "try-harder": lambda state: "Try harder.",
+    # the goal, verbatim, nothing else: tests whether re-grounding alone -
+    # a deterministic echo, no advice - is what helps.
+    "goal": lambda state: (
+        "Restating your task, verbatim:\n\n" + _first_user_text(state)),
+    # goal plus the static dk-mode note a fresh install injects: guidance
+    # without the per-turn model call or the selection step.
+    "goal+rules": lambda state: (
+        "Restating your task, verbatim:\n\n" + _first_user_text(state)
+        + "\n\n<self-steering>\n" + _static_note() + "\n</self-steering>"),
+}
+
+
 def _as_dk_messages(messages):
     """Inspect messages -> the shape dk_watch reads. The agent under test is
     the assistant; everything it is answering to is the user - the same shape
@@ -199,8 +248,9 @@ def _install_injection(model):
     async def generate(input, tools, tool_choice, config):
         cur = _CURRENT.get()
         if cur is not None:
-            state, use_dk, challenge_n = cur
-            payload = _payload_for(state, input, use_dk, challenge_n)
+            state, use_dk, challenge_n, payload_fn = cur
+            payload = _payload_for(state, input, use_dk, challenge_n,
+                                   payload_fn)
             if payload:
                 input = list(input) + [ChatMessageUser(content=payload)]
         return await inner_generate(input, tools, tool_choice, config)
@@ -210,14 +260,14 @@ def _install_injection(model):
     return model
 
 
-def _payload_for(state, messages, use_dk, challenge_n):
+def _payload_for(state, messages, use_dk, challenge_n, payload_fn=None):
     """What this arm says before this generation. Empty string means silence,
     which is the normal case for the dk arms."""
     n = state.metadata.get("gen_count", 0) + 1
     state.metadata["gen_count"] = n
     parts = []
     if challenge_n and (n - 1) % challenge_n == 0:
-        parts.append(challenge_text())
+        parts.append((payload_fn or PAYLOADS["challenge"])(state))
         state.metadata["challenge_fired"] = \
             state.metadata.get("challenge_fired", 0) + 1
     if use_dk:
@@ -246,7 +296,8 @@ def _payload_for(state, messages, use_dk, challenge_n):
 
 
 @solver
-def injected(inner, arm, use_dk=False, challenge_n=0):
+def injected(inner, arm, use_dk=False, challenge_n=0, payload="challenge"):
+    payload_fn = PAYLOADS[payload]
     """Mark this sample as injectable and record which arm it belongs to.
 
     The injection itself happens in _install_injection, at the model API.
@@ -256,7 +307,7 @@ def injected(inner, arm, use_dk=False, challenge_n=0):
     """
     async def solve(state, generate):
         state.metadata["arm"] = arm
-        token = _CURRENT.set((state, use_dk, challenge_n))
+        token = _CURRENT.set((state, use_dk, challenge_n, payload_fn))
         try:
             return await inner(state, generate)
         finally:

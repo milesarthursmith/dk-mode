@@ -123,9 +123,15 @@ def main():
     print(f"band of {len(ids)} problems from {band_info['date']} "
           f"(selected at {band_info['epochs']} epochs)")
 
+    def sched(payload):
+        return lambda: M.challenge(ids=ids, n=args.challenge_n,
+                                   payload=payload)
     builders = {"baseline": lambda: M.baseline(ids=ids),
                 "dk": lambda: M.dk(ids=ids),
-                "challenge": lambda: M.challenge(ids=ids, n=args.challenge_n)}
+                "challenge": sched("challenge"),
+                "try-harder": sched("try-harder"),
+                "goal": sched("goal"),
+                "goal+rules": sched("goal+rules")}
     rows = []
     for arm in [a.strip() for a in args.arms.split(",") if a.strip()]:
         print(f"\n=== {arm} ({len(ids)} band problems, "

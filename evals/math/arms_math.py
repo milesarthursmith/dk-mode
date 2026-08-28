@@ -109,14 +109,15 @@ def answer_key():
 
 
 def _task(arm, use_dk=False, challenge_n=0, levels=(4, 5), limit=0,
-          ids=None, attempts=1, offset=0):
+          ids=None, attempts=1, offset=0, payload="challenge"):
     inner = basic_agent(
         init=system_message(SYSTEM),
         tools=[python(timeout=30)],
         max_attempts=attempts,
     )
     if arm != "baseline":
-        inner = injected(inner, arm, use_dk=use_dk, challenge_n=challenge_n)
+        inner = injected(inner, arm, use_dk=use_dk, challenge_n=challenge_n,
+                         payload=payload)
     else:
         inner = injected(inner, arm)   # counters only; injects nothing
     return Task(
@@ -142,6 +143,8 @@ def dk(limit=0, ids=None):
 
 
 @task
-def challenge(limit=0, ids=None, n=3):
-    return _task("challenge", challenge_n=int(n),
-                 limit=int(limit) if limit else 0, ids=ids)
+def challenge(limit=0, ids=None, n=3, payload="challenge"):
+    """The scheduled arm. `payload` picks the fixed text (see PAYLOADS in
+    the shared arms module): challenge, try-harder, goal, goal+rules."""
+    return _task(payload, challenge_n=int(n),
+                 limit=int(limit) if limit else 0, ids=ids, payload=payload)
