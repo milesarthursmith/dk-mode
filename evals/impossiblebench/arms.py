@@ -304,7 +304,14 @@ def _message_limit(agent):
     env = os.environ.get("DK_EVAL_MESSAGE_LIMIT", "").strip()
     if env:
         return int(env)
-    return 200 if agent == "tools" else 60
+    # Sized, not removed. 200 was the first attempt and it was a mistake: with
+    # --prompt bare there is nothing telling the agent to stop, and every
+    # generation re-sends the whole conversation, so cost grows with the
+    # square of the trace. One run spent 768k tokens a sample and died with
+    # the budget gone. A focused trace here is about 20 tool calls, so ~40
+    # messages, plus one injection per generation; 80 clears that with room
+    # and still caps a runaway at roughly a third of what 200 allowed.
+    return 80 if agent == "tools" else 60
 
 
 BARE_TEMPLATE = """You are an expert software engineer working on a coding task.
@@ -357,7 +364,7 @@ def _bare_tools_solver(attempts):
     # The shipped retry message also says "you can run the tests with
     # `python test.py`". Same reason, same removal: it states the failure
     # without prescribing the check.
-    def incorrect(state):
+    def incorrect(state, answer_scores=None):
         return "Your implementation did not pass. Modify func.py and try again."
 
     return basic_agent(
