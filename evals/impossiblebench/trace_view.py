@@ -93,7 +93,7 @@ def main():
 
     picked = None
     for f in files:
-        log = read_eval_log(f)
+        log = read_eval_log(f, resolve_attachments=True)
         arm = "baseline"
         for s in (log.samples or []):
             arm = (s.metadata or {}).get("arm", "baseline")
