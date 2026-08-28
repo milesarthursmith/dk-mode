@@ -6,6 +6,45 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-28 — the throttle experiment, and the hooks verified headless
+
+**Selectivity sweep, run free.** 156 monitor calls through the `claude -p`
+CLI backend, replaying six recorded baseline traces, paired at every
+generation point - identical situation in, different prompt policy, count
+who spoke:
+
+    shipped        95% fire rate   2.23 selections/point
+    suppress       85%             1.58
+    strict-now     38%             0.51
+
+The replay's shipped rate matches the live run's 92%, so the instrument
+agrees with the measurement it is investigating.
+
+The separation answers which suspect drives the over-firing. Telling the
+monitor what it already delivered (`suppress`) buys almost nothing: it
+re-detects honestly each turn and treats unchanged state as newly live -
+on one sample it fired MORE with the suppression text present. Requiring
+the violation to BE the last assistant message (`strict-now`) cuts the
+rate by 60%. Most of the shipped fire rate is anticipatory narration of
+mid-task states that are trivially "about to" fail. What survives
+strict-now is the genuinely live minority - "repeats a step already
+taken" tops it, a present-tense violation visible in the message itself.
+A strict+suppress combination is sweeping now.
+
+The conclusion for dk_watch's prompt: the fix is not memory, it is the
+liveness test. "About to run into" licenses narrating the future; "is the
+last message itself the violation" does not.
+
+**The inspect_swe assumption, verified.** The plan to run real dk-mode
+under a bridged Claude Code rested on one untested claim: that hooks fire
+under headless `claude -p`. Tested today with a throwaway project whose
+settings register the real dk scripts plus marker writes: one turn, one
+tool call, and UserPromptSubmit, PostToolUse and Stop each fired exactly
+once, with the agent completing its task. The road to testing the shipped
+plugin - not a reimplementation - is open.
+
+---
+
 ## 2026-08-28 — why it fires 92% of the time: a diagnosis from the logs, for free
 
 The run's JSON already holds every rule the monitor picked and every alert
