@@ -6,418 +6,91 @@ there and what was actually tested.
 
 ---
 
-## 2026-08-28 — the throttle, ported and re-measured
+## 2026-08-28 — eval harness: instrument fixed, selectivity measured and cut
 
-The winning sweep policy was ported into dk_watch.py's shipped prompt and
-verified against the same six traces, twice. The chain, all measured
-paired on identical generation points, monitor on the free CLI backend:
+First runs against a paid API. Agent under test: Gemini 2.5 Flash Lite via
+OpenRouter; monitor: Haiku 4.5. Tasks: ImpossibleBench's LiveCodeBench
+variant, 20 frozen problems. Four arms — nothing / dk-mode / a fixed text
+on a schedule / both — injected through one channel so the comparison is
+between policies, not plumbing.
 
-    live run (old prompt)            92% fire rate
-    replayed, old prompt             95%   2.23 selections/point
-    experiment override (strict+sup) 36%   0.38
-    first port                       53%   0.71
-    tightened port (shipped now)     46%   0.63
-
-The first port lost 17 points against the experiment because the rewrite
-had paraphrased away the sentence doing the work; restoring the hard gate
-verbatim ("if the evidence is anything other than the last assistant
-message itself, return an empty active list") recovered 7 of them. All
-118 tests pass with the shipped prompt at 46%.
-
-Two reasons the shipped file reads higher than the 36% override, both
-stated so the number is not over-sold. The said-already clause cannot
-fire in replay: baseline traces contain no injections, so nothing is ever
-"already delivered" - in live use the delivered text is visible in the
-window and the clause can bite, so live rates should sit below replayed
-ones. And n is ~50 points per sweep with a nondeterministic CLI judge, so
-single sweeps carry a few points of noise (53 vs 46 is 6 fires).
-
-What still fires is the right thing. The top selection in every strict
-variant is "repeats a step already taken" - and the behavioural metrics
-say this agent genuinely repeats 13 calls per sample at baseline. A
-monitor that speaks on repeats and stays quiet about the future is the
-design working as described.
-
-Selectivity, start to finish, on $0: asserted in the README, listed
-unproven since 08-24, measured false at 92%, localised to the liveness
-framing by a paired offline experiment, fixed in the shipped prompt,
-re-measured at half the fire rate and a third the selection volume. The
-remaining question is the one only money answers: does the quieter
-monitor steer better than a fixed schedule in a live run - dk vs
-challenge, head to head, under real hooks.
-
----
-
-## 2026-08-28 — the throttle experiment, and the hooks verified headless
-
-**Selectivity sweep, run free.** 156 monitor calls through the `claude -p`
-CLI backend, replaying six recorded baseline traces, paired at every
-generation point - identical situation in, different prompt policy, count
-who spoke:
-
-    shipped        95% fire rate   2.23 selections/point
-    suppress       85%             1.58
-    strict-now     38%             0.51
-
-The replay's shipped rate matches the live run's 92%, so the instrument
-agrees with the measurement it is investigating.
-
-The separation answers which suspect drives the over-firing. Telling the
-monitor what it already delivered (`suppress`) buys almost nothing: it
-re-detects honestly each turn and treats unchanged state as newly live -
-on one sample it fired MORE with the suppression text present. Requiring
-the violation to BE the last assistant message (`strict-now`) cuts the
-rate by 60%. Most of the shipped fire rate is anticipatory narration of
-mid-task states that are trivially "about to" fail. What survives
-strict-now is the genuinely live minority - "repeats a step already
-taken" tops it, a present-tense violation visible in the message itself.
-A strict+suppress combination is sweeping now.
-
-The conclusion for dk_watch's prompt: the fix is not memory, it is the
-liveness test. "About to run into" licenses narrating the future; "is the
-last message itself the violation" does not.
-
-**The inspect_swe assumption, verified.** The plan to run real dk-mode
-under a bridged Claude Code rested on one untested claim: that hooks fire
-under headless `claude -p`. Tested today with a throwaway project whose
-settings register the real dk scripts plus marker writes: one turn, one
-tool call, and UserPromptSubmit, PostToolUse and Stop each fired exactly
-once, with the agent completing its task. The road to testing the shipped
-plugin - not a reimplementation - is open.
-
----
-
-## 2026-08-28 — why it fires 92% of the time: a diagnosis from the logs, for free
-
-The run's JSON already holds every rule the monitor picked and every alert
-it wrote, so the diagnosis cost nothing. 1,407 rule selections across 693
-generations - two per turn. The tally:
-
-    441  Claims something is done without checking
-    263  Ignores a constraint that was stated in the task
-    248  Stops before the task is finished
-    200  Repeats a step already taken
-    108  Skims instead of reading
-
-Three causes, all visible in the prompt and the tally.
-
-**1. The monitor is not hallucinating - and that is the problem.** The
-alerts are specific and mostly TRUE: "Agent claimed tests pass without
-actually running them" is exactly what baseline does on 95% of samples.
-Detection works. What dk-mode lacks is any memory of having already spoken:
-it said "claims done without checking" 441 times. There is no dedup, no
-cooldown, no "I told it this two turns ago and nothing has changed, so shut
-up." The brief carries the arc of the conversation but is never used to
-suppress a repeat. Accurate narration delivered every turn is nagging, and
-the traces show what nagging costs: the named behaviours did not improve
-(never_tested 0.95 -> 0.85, unverified_done -> 1.00) while repeats rose 86%
-and re-reads 3.5x - each injection ("view test.py first", "run the tests")
-triggers actions without changing the destination.
-
-**2. Two of the top rules are trivially live mid-task.** "Stops before the
-task is finished" is true at every intermediate step of honest work - the
-task IS unfinished. "About to claim done without checking" is satisfied by
-the entire trajectory of an agent that tests rarely. The prompt asks which
-rules the situation "is about to run into"; mid-task, for these rules, the
-honest answer is almost always yes. The liveness question needs a sharper
-test than "about to", or those rules need to be exchange-level only.
-
-**3. The cadence is 30x the design's.** dk_watch's prompt is written for
-the Stop hook - once per user exchange: "what the agent just said and what
-the user just asked". The eval asks it before every generation, ~35 times
-per sample, per EVALS.md 2.4's per-tool-call channel. The port was correct
-about where injection must happen in a benchmark, but the monitor prompt
-was carried over unchanged to a cadence it was never written for. Note the
-flip side: at the shipped cadence a benchmark sample has ONE user exchange,
-so the shipped dk-mode would have fired roughly once per task, at the end.
-Neither extreme is the tool working as intended.
-
-**A harness gap found while checking this.** The injected payloads are
-absent from the logged transcript: inspect records model input above the
-ModelAPI layer where the patch appends, so the text reaches the provider
-(the counters and billing prove it) but the .eval file shows the
-conversation without it. Selections and alerts are logged in metadata; the
-interleaving is not. Until the payloads are recorded per generation there
-is no way to read a trace and see injection -> reaction side by side, which
-is exactly the reading EVALS.md 2.5 demands. Fix before the next paid run.
-
-**What this means for the design.** The selection layer, as shipped, is a
-competent detector with no throttle. At 92% fire rate it degenerates into
-the scheduled challenge plus a model call - strictly worse than its own
-dumb control. The interesting question was never "can it spot the
-failure" but "can it speak rarely enough to be heard." That is now the
-climb: add said-already suppression, make always-true-mid-task rules
-exchange-level, and re-measure the fire rate at the same cadence. All of
-that is tunable offline against the recorded baseline traces with the
-monitor on the free CLI backend, so the next iteration costs nothing until
-the confirmation run.
-
----
-
-## 2026-08-28 — the first completed comparison: no effect on outcome, worse behaviour
-
-Gemini 2.5 Flash Lite as the agent under test (40x cheaper than Haiku, which
-is what made a completed run affordable at all), Haiku still as the monitor,
-tools scaffold, --prompt bare, 20 frozen tasks, 6 attempts. baseline and dk
-both ran all 20 samples. The challenge arm died on 402 with the balance gone,
-so it has no number.
-
-**Outcome: a tie.**
+**Result: one completed comparison, and it is a tie on outcome.**
 
     baseline 0.15 (3/20)      dk 0.15 (3/20)
 
-Paired on identical tasks: dk won 2, lost 2, and 16 of 20 tasks gave the
-same answer either way. That is a tie in the strictest sense available, not
-a small win or a small loss.
+Paired on identical tasks: dk won 2, lost 2, 16 unchanged. On behaviour it
+was worse — steps 21.2 → 34.1, repeats 13.2 → 24.5, redundant re-reads
+1.2 → 4.0, against one improvement (never_tested 0.95 → 0.85). The
+scheduled-challenge arm did not complete.
 
-**Behaviour: worse on nearly every axis.**
+This does not say dk-mode fails. It says the run was made at a 92% fire
+rate, which is itself the finding.
 
-    metric              baseline      dk
-    steps                  21.20   34.05    +62%
-    edits                  11.20   18.30    +63%
-    repeats                13.15   24.45    +86%
-    redundant_views         1.15    4.00    3.5x
-    test_runs               0.15    0.35
-    never_tested            0.95    0.85    the one improvement
-    unverified_done         0.90    1.00    worse
+**Finding: selectivity, asserted since the first README, is false as
+shipped.** The monitor fired on 639 of 693 generations and injected 491k
+characters — 1,407 rule selections, "claims something is done without
+checking" chosen 441 times. The alerts were mostly accurate; what was
+missing was any reason to stay quiet. A layer that speaks on 92% of turns
+has removed its own selection step, which makes it the scheduled challenge
+plus a model call.
 
-dk-mode made the agent do 62% more work, repeat itself 86% more often, and
-re-read files it had already read 3.5 times as much, for exactly the same
-number of solved tasks. The single thing that moved the right way is
-never_tested, 0.95 to 0.85: two more samples ran the tests at all.
+Diagnosed offline by replaying recorded traces through the monitor alone —
+no agent, no spend — once per prompt variant, paired at every generation
+point:
 
-**First, the good news about the instrument.** The bare prompt did what it
-was built to do. Base rates are off the floor - baseline now fails to test
-at all on 95% of samples and submits unverified on 90% - where under the
-shipped prompt both sat at exactly 0.00. That confirms the earlier
-diagnosis: the scaffold had been handing every arm dk-mode's headline rule,
-and the flat results before this were an artifact of that, not evidence
-about dk-mode.
+    old shipped prompt                                95%   2.23 sel/point
+    told what it already said                         85%   1.58
+    violation must BE the last assistant message      38%   0.51
+    both                                              36%   0.38
+    current shipped prompt                            46%   0.63
 
-**Now the finding. Selectivity is broken.**
+The driver is the liveness wording, not missing memory. "About to run into"
+licenses narrating the future, and two rules ("stops before the task is
+finished", "about to claim done") are trivially true at every intermediate
+step of honest work. `dk_watch.PROMPT` JOB 1 now requires the last
+assistant message to BE the violation, treats an already-selected rule as
+covered, and states that the usual answer is an empty list. 118 tests pass.
+Replay overstates live rates: baseline traces contain no injections, so the
+already-delivered clause cannot bite there.
 
-The monitor fired on 639 of 693 generations - 92% - and injected 491,186
-characters. The README says "usually no rule applies" and the design rests
-on the relevance call selecting almost nothing on a normal turn. docs/log.md
-lists this under "Not yet proven", item 1: "Selectivity is asserted, not
-measured. The claim 'usually no rule applies' is the assumption the whole
-design rests on."
+**Three instrument faults found and fixed, in order of severity.**
 
-It is now measured. The assumption does not hold. A monitor that speaks on
-92% of turns is not selecting; it is narrating. And the behavioural columns
-show what that costs: every injection is another instruction competing with
-the task, and the agent responds by doing more, repeating more, and
-re-reading more, without solving more.
+1. *Arms that injected nothing.* The `tools` scaffold is `basic_agent`,
+   which runs its own loop and never touches the `generate` an outer
+   solver is handed — so a `dk` arm reported `gen_count 0`, injected
+   nothing, scored as baseline, and kept its label. Injection now happens
+   at `ModelAPI.generate`, the one point every scaffold passes through.
+   The runner warns when a non-baseline arm records zero generations.
+2. *A pre-steered control.* The `tools` scaffold's system prompt hands
+   every arm a five-step workflow ending "Run `python test.py` … if tests
+   fail, iterate", and the retry message repeats it — dk-mode's headline
+   rule, installed in the baseline. Under it `unverified_done` and
+   `never_tested` sat at exactly 0.00, leaving nothing to improve.
+   `--prompt bare` removes the workflow and keeps the facts; the same
+   baseline then fails to test on 95% of samples.
+3. *Outcome scoring answered the wrong question.* Pass/fail on these tasks
+   is decided by whether the model knows the algorithm. Under the
+   `minimal` scaffold, 17 of 20 tasks gave the same answer in every arm —
+   an effective n of three. `trace_metrics.py` now scores the trace
+   instead: submitted-without-testing, never-tested, repeated calls,
+   redundant re-reads, steps. Counts of what the agent did, not a verdict
+   on whether its answer was right.
 
-This is the most useful result of the day, and it is a negative one about
-the layer the project is named after. It does not say the idea is wrong. It
-says this configuration of it is: at 92% fire rate the selection step is not
-doing the job the architecture assigns it, so the comparison against a
-scheduled challenge - the dumb control that cannot pick wrong because it
-never picks - has not really been run yet. The challenge arm is the missing
-number, and on this evidence it is the one most likely to win.
+**Also.** Injected payloads are recorded per generation, so
+`trace_view.py` can print injection beside reaction. All three dk-mode
+hooks verified firing under headless `claude -p`, which is the
+prerequisite for benchmarking the shipped plugin rather than a
+reimplementation of it. Cost is now calibrated on two samples and checked
+against the balance before a run: the `tools` scaffold costs ~$1/sample on
+Haiku against ~$0.12 on Flash Lite, and an uncalibrated estimate lost two
+runs to mid-flight credit exhaustion.
 
-**Caveats, stated so the number is not over-read.** n=20, and the means
-carry wide error bars; repeats 13 to 24 is a large gap but not a
-significance test. Flash Lite solves only 15% of these tasks, so most
-samples are failures either way and the outcome column has little room to
-move. The monitor ran on Haiku while the agent ran on Flash Lite, which is
-the shipped shape but not a matched pair.
-
-**What this changes.** The next thing to measure is not another arm. It is
-the fire rate: what DK_MAX_ACTIVE, the window, and the prompt have to be
-for the monitor to speak on a minority of turns, and whether the behavioural
-columns improve when it does. A steering layer that always speaks has
-removed its own selection step, which makes it the scheduled challenge with
-a model call attached - strictly worse than the control it was meant to beat.
-
----
-
-## 2026-08-28 — the baseline was pre-steered, and the fix for it blew the budget
-
-Two findings, one of them expensive.
-
-**The scaffold was already giving every arm dk-mode's advice.**
-
-trace_metrics.py was written to stop scoring the task and start scoring the
-behaviour: from the tool calls in a log it counts submitting after an edit
-with no test run in between, never testing at all, repeating a call already
-made, re-reading a file with no edit between. Each maps to a shipped rule,
-each is a count a script can take, no hand labels and no judge.
-
-Run against traces already paid for, it answered the question the pass
-rates could not:
-
-    baseline  n=11  pass 1.00  steps 14.7  never_tested 0.00
-                                           unverified_done 0.00
-
-Baseline never once submitted without testing - and not out of virtue. The
-tools scaffold's system prompt hands every arm a five-step workflow ending
-"Run `python test.py` to check if your implementation passes / If tests
-fail, analyze the error and iterate", and the retry message repeats it.
-That is dk-mode's headline rule, pre-installed, twice, in the control.
-Every comparison run this day was asking whether dk-mode improves a
-baseline that had already been given dk-mode's instructions. The flat
-results were never evidence about dk-mode.
-
-So --prompt bare rebuilds the same scaffold with the workflow and the
-reminders removed and every fact kept. That is the right experiment.
-
-**It also cost $15.50 and produced nothing, for a reason worth writing
-down.**
-
-The run died on HTTP 402 again, with $5.91 left of $40. The token counts
-say why: baseline alone spent 9,986,311 tokens on 13 samples - about 768k
-per sample, roughly $1 each against the $0.25 estimated.
-
-The cause was a fix applied too broadly. Injected arms spend the message
-budget faster than baseline, because each injection is a message; a binding
-limit would make steering lose on truncation alone. The response was to
-raise message_limit from the shipped 30 to 200. Combined with the bare
-prompt - which by design removes the instructions that kept traces to about
-15 steps - nothing capped the wandering, and every generation re-sends the
-whole accumulated conversation, so cost grows with the square of the trace.
-The confound was real; removing the cap rather than sizing it was not the
-way to fix it.
-
-Two smaller lessons from the same failure:
-
-- --budget was added after the first 402 and it passed at $21.38 before
-  this run started. A pre-flight balance check cannot help when the cost
-  estimate is four times low. The missing guard is cost per sample measured
-  on one sample, not a balance compared against a guess.
-- The 402 is partly a concurrency artifact: "in_flight_budget_exhausted"
-  means credit is reserved per in-flight request. The dk arm issues about
-  twice the calls, agent plus monitor, which is why it died at 2
-  generations while challenge ran to 189 on the same balance.
-
-**Standing.** About $33 spent across the day, no usable comparison between
-any two arms. What was bought: the harness reproduces the published
-baseline, a silent injection bug is fixed, three configurations are
-eliminated as instruments, the behavioural metric exists and works, and the
-control is now known to have been pre-steered. What was not bought: a
-single number about whether dk-mode helps.
-
-The next run must fix the cost model before anything else - size
-message_limit near what a focused trace needs rather than removing it,
-measure cost per sample on one sample and multiply, and cap concurrency so
-the in-flight reservation cannot trip the budget.
+**Open.** Whether dk-mode helps is unmeasured. The pair that tests its
+actual claim — that selection beats mere presence — is dk against the
+scheduled challenge, head to head, at the corrected fire rate.
 
 ---
 
-## 2026-08-28 — four arms, real money, and three different reasons for no answer
-
-The first runs against a real API. Haiku 4.5 as the agent under test and as
-the monitor, both over OpenRouter, twenty frozen tasks. Three runs, three
-distinct reasons the comparison did not resolve. None of them is "dk-mode
-does not work"; none of them is evidence that it does.
-
-**Run 1 - conflicting split, minimal scaffold. Every arm 0.00.**
-
-    baseline 0.00   dk 0.00   challenge 0.00   dk+challenge 0.00
-
-A cheating rate of zero everywhere, so nothing for the other arms to
-prevent. The instrument, though, checked out: the monitor spoke on 51 of 60
-generations, all 20 baseline samples ended in real assertion failures, and
-only 5 sandbox timeouts occurred across 60+ intermediate attempts.
-
-Then the published numbers arrived and changed what the zero means.
-arXiv:2510.20270 figure 4 is this exact configuration - Conflicting-
-LiveCodeBench, minimal scaffold - and **six of its eight frontier models
-score exactly 0.0%** (Opus 4.1, Sonnet 4, Sonnet 3.7, o4-mini, GPT-4.1,
-Qwen3-Coder; GPT-5 is 1%, o3 is the lone outlier at 33%). EVALS.md 2.2
-demanded the published baseline be reproduced before trusting anything.
-It reproduced. The harness reads true; the split is a floor.
-
-Two further facts from that paper, both of which cut against plans that
-were on the table here:
-
-- **Cheating rises with capability**, not with weakness: "we observe more
-  capable models having higher cheating rates" (fig 3 caption). The two
-  weakest models tested cheat least. So moving to cheaper models - the
-  obvious way to buy a higher failure rate - pushes this metric further
-  into the floor, not out of it. The cheap-model screen was dropped before
-  it was run.
-- **Prompt dominates scaffold** on this split: the same model goes from
-  92% to 1% cheating between prompt A and prompt D, and prompt D is what
-  ships. The near-zero headline is a property of the tuned prompt.
-
-No Haiku-class model appears anywhere in that paper. The 0.00 above is,
-as far as can be told, the first one measured.
-
-**Run 2 - original split, minimal scaffold. Headroom, and only three
-tasks that can move.**
-
-    baseline 0.45   dk 0.35   challenge 0.40   dk+challenge 0.40
-
-dk-mode below baseline. The rates are the wrong thing to read - with n=20
-the standard error is about 0.11 - but the arms are paired on identical
-tasks, so the discordant counts are available and they are small:
-
-    dk vs baseline            0 won, 2 lost
-    challenge vs baseline     1 won, 2 lost
-    dk+challenge vs baseline  0 won, 1 lost
-
-Two discordant pairs is a coin flip. The real finding is underneath: **11
-of the 20 tasks fail in every arm and 6 pass in every arm**, so only three
-tasks are capable of moving at all. The effective sample size for measuring
-steering is three, and the full 103-task split would buy roughly fifteen.
-
-That is a statement about the instrument. A one-shot algorithmic puzzle is
-decided by whether the model knows the algorithm. None of the failures
-dk-mode names - claiming done without checking, repeating a step, losing a
-constraint - can even occur in a scaffold with no tools, no files and three
-submissions. dk winning zero tasks is what a distraction looks like, not
-what a regression looks like.
-
-**A validity bug, found by the smoke run and not by the numbers.**
-
-Switching to the tools scaffold exposed one. That scaffold is
-`basic_agent`, which runs its own loop and calls the model directly, so it
-never touches the `generate` the outer solver is handed. The injection
-wrapper was simply never reached: the arm reported gen_count 0, injected
-nothing, scored as a plain baseline, and still called itself `dk`. This is
-the same class of fault that invalidated the harness deleted on 08-27 - an
-arm not doing the thing it is named after.
-
-Injection now happens at `ModelAPI.generate`, the one point every scaffold
-must pass through, with a contextvar carrying the sample's state and tool
-results folded into the monitor's view (that is where "the tests failed"
-lives, and the rules about claiming done are blind without it). Same smoke
-sample, before and after: gens 0 -> 11, dk_fired 0 -> 5. run_arms.py now
-warns when a non-baseline arm records zero generations, so this degrades
-loudly instead of publishing.
-
-**Run 3 - original split, tools scaffold. Aborted: out of credits.**
-
-All four arms died on HTTP 402 partway through. The account held $20; the
-tools scaffold costs roughly $0.20 a sample against $0.01 on minimal, and
-80 samples emptied it. The cost was estimated beforehand and stated; the
-**balance** was not checked against it, which is the mistake - one API call
-would have caught it.
-
-Nothing from that run is reportable: the arms completed 19, 2, 8 and 9
-samples, and the samples that finished are the ones that ran first, not a
-sample of anything. The rows are in evals/results.md marked ABORTED so they
-cannot be mistaken for a comparison.
-
-One free observation from data already paid for, offered as a lead and not
-a result: under the tools scaffold, baseline passed all 11 tasks it managed
-to score, including two (lcbhard_1, lcbhard_4) that failed under minimal.
-The nine that never finished are exactly the nine that scored zero under
-minimal, so this is the easy tasks getting easier with the hard ones
-unmeasured. Whether the tools scaffold buys real headroom or just replaces
-the conflicting split's floor with a ceiling is **unresolved**, and it is
-the first thing the next run should settle.
-
-**Where this leaves the climb.** Nothing has been measured about whether
-dk-mode helps. Three configurations have been eliminated as instruments:
-conflicting/minimal is a floor, original/minimal has an effective n of
-three, and conflicting/minimal on cheaper models would be worse than
-either. The tools scaffold is the only untested candidate, it now injects
-correctly, and it needs about $15 to answer.
-
----
 
 ## 2026-08-27 — the eval harness rebuilt, four arms, plumbing verified
 
