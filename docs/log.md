@@ -6,6 +6,85 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-28 — the first completed comparison: no effect on outcome, worse behaviour
+
+Gemini 2.5 Flash Lite as the agent under test (40x cheaper than Haiku, which
+is what made a completed run affordable at all), Haiku still as the monitor,
+tools scaffold, --prompt bare, 20 frozen tasks, 6 attempts. baseline and dk
+both ran all 20 samples. The challenge arm died on 402 with the balance gone,
+so it has no number.
+
+**Outcome: a tie.**
+
+    baseline 0.15 (3/20)      dk 0.15 (3/20)
+
+Paired on identical tasks: dk won 2, lost 2, and 16 of 20 tasks gave the
+same answer either way. That is a tie in the strictest sense available, not
+a small win or a small loss.
+
+**Behaviour: worse on nearly every axis.**
+
+    metric              baseline      dk
+    steps                  21.20   34.05    +62%
+    edits                  11.20   18.30    +63%
+    repeats                13.15   24.45    +86%
+    redundant_views         1.15    4.00    3.5x
+    test_runs               0.15    0.35
+    never_tested            0.95    0.85    the one improvement
+    unverified_done         0.90    1.00    worse
+
+dk-mode made the agent do 62% more work, repeat itself 86% more often, and
+re-read files it had already read 3.5 times as much, for exactly the same
+number of solved tasks. The single thing that moved the right way is
+never_tested, 0.95 to 0.85: two more samples ran the tests at all.
+
+**First, the good news about the instrument.** The bare prompt did what it
+was built to do. Base rates are off the floor - baseline now fails to test
+at all on 95% of samples and submits unverified on 90% - where under the
+shipped prompt both sat at exactly 0.00. That confirms the earlier
+diagnosis: the scaffold had been handing every arm dk-mode's headline rule,
+and the flat results before this were an artifact of that, not evidence
+about dk-mode.
+
+**Now the finding. Selectivity is broken.**
+
+The monitor fired on 639 of 693 generations - 92% - and injected 491,186
+characters. The README says "usually no rule applies" and the design rests
+on the relevance call selecting almost nothing on a normal turn. docs/log.md
+lists this under "Not yet proven", item 1: "Selectivity is asserted, not
+measured. The claim 'usually no rule applies' is the assumption the whole
+design rests on."
+
+It is now measured. The assumption does not hold. A monitor that speaks on
+92% of turns is not selecting; it is narrating. And the behavioural columns
+show what that costs: every injection is another instruction competing with
+the task, and the agent responds by doing more, repeating more, and
+re-reading more, without solving more.
+
+This is the most useful result of the day, and it is a negative one about
+the layer the project is named after. It does not say the idea is wrong. It
+says this configuration of it is: at 92% fire rate the selection step is not
+doing the job the architecture assigns it, so the comparison against a
+scheduled challenge - the dumb control that cannot pick wrong because it
+never picks - has not really been run yet. The challenge arm is the missing
+number, and on this evidence it is the one most likely to win.
+
+**Caveats, stated so the number is not over-read.** n=20, and the means
+carry wide error bars; repeats 13 to 24 is a large gap but not a
+significance test. Flash Lite solves only 15% of these tasks, so most
+samples are failures either way and the outcome column has little room to
+move. The monitor ran on Haiku while the agent ran on Flash Lite, which is
+the shipped shape but not a matched pair.
+
+**What this changes.** The next thing to measure is not another arm. It is
+the fire rate: what DK_MAX_ACTIVE, the window, and the prompt have to be
+for the monitor to speak on a minority of turns, and whether the behavioural
+columns improve when it does. A steering layer that always speaks has
+removed its own selection step, which makes it the scheduled challenge with
+a model call attached - strictly worse than the control it was meant to beat.
+
+---
+
 ## 2026-08-28 — the baseline was pre-steered, and the fix for it blew the budget
 
 Two findings, one of them expensive.

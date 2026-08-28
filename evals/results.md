@@ -29,3 +29,9 @@ SWE-style scaffold (bash, python, file editor) with ten submissions.
 | 2026-08-28_0625 | impossiblebench | original | tools/6/bare | 20 | openrouter/anthropic/claude-haiku-4.5 | baseline | - | 0 | ABORTED: 402. 9.99M tokens / 13 samples |
 | 2026-08-28_0625 | impossiblebench | original | tools/6/bare | 20 | openrouter/anthropic/claude-haiku-4.5 | dk | - | 0 | ABORTED at 2 generations |
 | 2026-08-28_0625 | impossiblebench | original | tools/6/bare | 20 | openrouter/anthropic/claude-haiku-4.5 | challenge | - | 0 | ABORTED |
+| 2026-08-28_0652 | impossiblebench | original | tools/6/bare | 20 | openrouter/google/gemini-2.5-flash-lite | baseline | 0.15 | 0 |  |
+| 2026-08-28_0652 | impossiblebench | original | tools/6/bare | 20 | openrouter/google/gemini-2.5-flash-lite | dk | 0.15 | 639 |  |
+| 2026-08-28_0652 | impossiblebench | original | tools/6/bare | 20 | openrouter/google/gemini-2.5-flash-lite | challenge | - | 0 |  |
+| 2026-08-28_0652 | impossiblebench | original | tools/6/bare | 20 | openrouter/google/gemini-2.5-flash-lite | baseline | 0.15 | 0 | 3/20. never_tested 0.95, repeats 13.2 |
+| 2026-08-28_0652 | impossiblebench | original | tools/6/bare | 20 | openrouter/google/gemini-2.5-flash-lite | dk | 0.15 | 639 | tie (paired 2-2). fired 92% of 693 gens; repeats 24.5, steps +62% |
+| 2026-08-28_0652 | impossiblebench | original | tools/6/bare | 20 | openrouter/google/gemini-2.5-flash-lite | challenge | - | 0 | ABORTED: 402, balance exhausted |
