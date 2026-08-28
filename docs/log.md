@@ -6,6 +6,120 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-28 — four arms, real money, and three different reasons for no answer
+
+The first runs against a real API. Haiku 4.5 as the agent under test and as
+the monitor, both over OpenRouter, twenty frozen tasks. Three runs, three
+distinct reasons the comparison did not resolve. None of them is "dk-mode
+does not work"; none of them is evidence that it does.
+
+**Run 1 - conflicting split, minimal scaffold. Every arm 0.00.**
+
+    baseline 0.00   dk 0.00   challenge 0.00   dk+challenge 0.00
+
+A cheating rate of zero everywhere, so nothing for the other arms to
+prevent. The instrument, though, checked out: the monitor spoke on 51 of 60
+generations, all 20 baseline samples ended in real assertion failures, and
+only 5 sandbox timeouts occurred across 60+ intermediate attempts.
+
+Then the published numbers arrived and changed what the zero means.
+arXiv:2510.20270 figure 4 is this exact configuration - Conflicting-
+LiveCodeBench, minimal scaffold - and **six of its eight frontier models
+score exactly 0.0%** (Opus 4.1, Sonnet 4, Sonnet 3.7, o4-mini, GPT-4.1,
+Qwen3-Coder; GPT-5 is 1%, o3 is the lone outlier at 33%). EVALS.md 2.2
+demanded the published baseline be reproduced before trusting anything.
+It reproduced. The harness reads true; the split is a floor.
+
+Two further facts from that paper, both of which cut against plans that
+were on the table here:
+
+- **Cheating rises with capability**, not with weakness: "we observe more
+  capable models having higher cheating rates" (fig 3 caption). The two
+  weakest models tested cheat least. So moving to cheaper models - the
+  obvious way to buy a higher failure rate - pushes this metric further
+  into the floor, not out of it. The cheap-model screen was dropped before
+  it was run.
+- **Prompt dominates scaffold** on this split: the same model goes from
+  92% to 1% cheating between prompt A and prompt D, and prompt D is what
+  ships. The near-zero headline is a property of the tuned prompt.
+
+No Haiku-class model appears anywhere in that paper. The 0.00 above is,
+as far as can be told, the first one measured.
+
+**Run 2 - original split, minimal scaffold. Headroom, and only three
+tasks that can move.**
+
+    baseline 0.45   dk 0.35   challenge 0.40   dk+challenge 0.40
+
+dk-mode below baseline. The rates are the wrong thing to read - with n=20
+the standard error is about 0.11 - but the arms are paired on identical
+tasks, so the discordant counts are available and they are small:
+
+    dk vs baseline            0 won, 2 lost
+    challenge vs baseline     1 won, 2 lost
+    dk+challenge vs baseline  0 won, 1 lost
+
+Two discordant pairs is a coin flip. The real finding is underneath: **11
+of the 20 tasks fail in every arm and 6 pass in every arm**, so only three
+tasks are capable of moving at all. The effective sample size for measuring
+steering is three, and the full 103-task split would buy roughly fifteen.
+
+That is a statement about the instrument. A one-shot algorithmic puzzle is
+decided by whether the model knows the algorithm. None of the failures
+dk-mode names - claiming done without checking, repeating a step, losing a
+constraint - can even occur in a scaffold with no tools, no files and three
+submissions. dk winning zero tasks is what a distraction looks like, not
+what a regression looks like.
+
+**A validity bug, found by the smoke run and not by the numbers.**
+
+Switching to the tools scaffold exposed one. That scaffold is
+`basic_agent`, which runs its own loop and calls the model directly, so it
+never touches the `generate` the outer solver is handed. The injection
+wrapper was simply never reached: the arm reported gen_count 0, injected
+nothing, scored as a plain baseline, and still called itself `dk`. This is
+the same class of fault that invalidated the harness deleted on 08-27 - an
+arm not doing the thing it is named after.
+
+Injection now happens at `ModelAPI.generate`, the one point every scaffold
+must pass through, with a contextvar carrying the sample's state and tool
+results folded into the monitor's view (that is where "the tests failed"
+lives, and the rules about claiming done are blind without it). Same smoke
+sample, before and after: gens 0 -> 11, dk_fired 0 -> 5. run_arms.py now
+warns when a non-baseline arm records zero generations, so this degrades
+loudly instead of publishing.
+
+**Run 3 - original split, tools scaffold. Aborted: out of credits.**
+
+All four arms died on HTTP 402 partway through. The account held $20; the
+tools scaffold costs roughly $0.20 a sample against $0.01 on minimal, and
+80 samples emptied it. The cost was estimated beforehand and stated; the
+**balance** was not checked against it, which is the mistake - one API call
+would have caught it.
+
+Nothing from that run is reportable: the arms completed 19, 2, 8 and 9
+samples, and the samples that finished are the ones that ran first, not a
+sample of anything. The rows are in evals/results.md marked ABORTED so they
+cannot be mistaken for a comparison.
+
+One free observation from data already paid for, offered as a lead and not
+a result: under the tools scaffold, baseline passed all 11 tasks it managed
+to score, including two (lcbhard_1, lcbhard_4) that failed under minimal.
+The nine that never finished are exactly the nine that scored zero under
+minimal, so this is the easy tasks getting easier with the hard ones
+unmeasured. Whether the tools scaffold buys real headroom or just replaces
+the conflicting split's floor with a ceiling is **unresolved**, and it is
+the first thing the next run should settle.
+
+**Where this leaves the climb.** Nothing has been measured about whether
+dk-mode helps. Three configurations have been eliminated as instruments:
+conflicting/minimal is a floor, original/minimal has an effective n of
+three, and conflicting/minimal on cheaper models would be worse than
+either. The tools scaffold is the only untested candidate, it now injects
+correctly, and it needs about $15 to answer.
+
+---
+
 ## 2026-08-27 — the eval harness rebuilt, four arms, plumbing verified
 
 `docs/EVALS.md` designs the replacement for the harness removed earlier
