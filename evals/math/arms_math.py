@@ -59,10 +59,12 @@ submit() with ONLY the final answer - a number or a LaTeX expression,
 nothing else."""
 
 
-def load_dataset(levels=(4, 5), limit=0, ids=None, seed=41):
+def load_dataset(levels=(4, 5), limit=0, ids=None, seed=41, offset=0):
     """MATH-500, optionally restricted to levels or to an explicit id list
     (the band). Shuffled with a fixed seed so 'first N' is a stable random
-    slice rather than the dataset's own ordering."""
+    slice rather than the dataset's own ordering; offset draws the next
+    slice of the same shuffle, so a widening pass never re-pays for
+    problems already banded."""
     import random
 
     from datasets import load_dataset as hf_load
@@ -77,6 +79,8 @@ def load_dataset(levels=(4, 5), limit=0, ids=None, seed=41):
             id=r["unique_id"], input=r["problem"], target=r["answer"],
             metadata={"level": int(r["level"]), "subject": r["subject"]}))
     random.Random(seed).shuffle(samples)
+    if offset:
+        samples = samples[offset:]
     if limit:
         samples = samples[:limit]
     return MemoryDataset(samples)
@@ -105,7 +109,7 @@ def answer_key():
 
 
 def _task(arm, use_dk=False, challenge_n=0, levels=(4, 5), limit=0,
-          ids=None, attempts=1):
+          ids=None, attempts=1, offset=0):
     inner = basic_agent(
         init=system_message(SYSTEM),
         tools=[python(timeout=30)],
@@ -117,7 +121,8 @@ def _task(arm, use_dk=False, challenge_n=0, levels=(4, 5), limit=0,
         inner = injected(inner, arm)   # counters only; injects nothing
     return Task(
         name=f"math_{arm}",
-        dataset=load_dataset(levels=levels, limit=limit, ids=ids),
+        dataset=load_dataset(levels=levels, limit=limit, ids=ids,
+                             offset=offset),
         solver=inner,
         scorer=answer_key(),
         sandbox=("docker", os.path.join(HERE, "compose.yaml")),
@@ -126,8 +131,9 @@ def _task(arm, use_dk=False, challenge_n=0, levels=(4, 5), limit=0,
 
 
 @task
-def baseline(limit=0, ids=None):
-    return _task("baseline", limit=int(limit) if limit else 0, ids=ids)
+def baseline(limit=0, ids=None, offset=0):
+    return _task("baseline", limit=int(limit) if limit else 0, ids=ids,
+                 offset=int(offset))
 
 
 @task

@@ -60,6 +60,9 @@ def main():
                     default="openrouter/google/gemini-2.5-flash-lite")
     ap.add_argument("--limit", type=int, default=60,
                     help="band stage: problems drawn from the level slice")
+    ap.add_argument("--offset", type=int, default=0,
+                    help="band stage: skip the first N of the shuffled "
+                         "slice - widen the band without re-running it")
     ap.add_argument("--epochs", type=int, default=3)
     ap.add_argument("--arms", default="baseline,dk,challenge")
     ap.add_argument("--challenge-n", type=int, default=3)
@@ -86,10 +89,15 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
 
     if args.stage == "band":
-        t = M.baseline(limit=args.limit)
+        t = M.baseline(limit=args.limit, offset=args.offset)
         logs = inspect_eval(t, model=model, epochs=args.epochs,
                             log_dir=log_dir, display="plain")
         passes, _ = per_task_passes(logs[0])
+        # Widening: fold previous banding passes in. Disjoint offsets mean
+        # ids never collide, so a plain merge is exact.
+        if os.path.exists(BAND_FILE):
+            with open(BAND_FILE) as f:
+                passes = {**json.load(f).get("passes", {}), **passes}
         always = [i for i, v in passes.items() if all(v)]
         never = [i for i, v in passes.items() if not any(v)]
         band = [i for i, v in passes.items() if any(v) and not all(v)]
