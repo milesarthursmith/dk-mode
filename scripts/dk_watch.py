@@ -382,9 +382,9 @@ the shallow answer. Not a risk, not a tendency, not something the agent is \
 "about to" do, and never because a rule is true in general - being in the \
 middle of unfinished work is not a violation. A rule you have already \
 selected in this conversation is covered: do not select it again unless the \
-agent did that exact thing again afterwards. The correct answer is usually \
-an empty list; speak only when the evidence is in front of you. At most \
-{max_active}.
+agent did that exact thing again afterwards. If the evidence is anything \
+other than the last assistant message itself, return an empty active list. \
+The correct answer is usually an empty list. At most {max_active}.
 
 Optionally add one "alert": a single blunt present-tense sentence naming \
 what the agent is about to do wrong. Only if it is specific to THIS \
