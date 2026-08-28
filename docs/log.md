@@ -6,6 +6,36 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-28 — the power run: dk's edge was noise; the schedule's survives, weakly
+
+Band widened to 46 flaky problems (from 220 banded), arms re-run at 5
+fresh epochs - 230 trials per arm, double the first comparison.
+
+    arm         mean   pass^5   pass@5   fire rate   injected chars
+    baseline    0.70    20/46    41/46           -                0
+    dk          0.70    17/46    42/46   97/722=13%          44,279
+    challenge   0.75    22/46    44/46  281/608=46%         173,939
+
+Paired per task: dk vs baseline 12 won / 14 lost (sign p=0.85) - the
+first run's +0.08 for dk did not replicate; it was noise, exactly the
+possibility the log flagged. The schedule's edge held direction but not
+significance: challenge vs baseline 18/11 (p=0.27), challenge vs dk
+17/12 (p=0.46).
+
+Current best estimate after 690 trials: the selecting monitor does
+nothing to maths completion; a scheduled generic self-check may add
+about five points but the evidence is about one-in-four to be luck.
+Also worth noting: challenge finished in fewer generations than
+baseline (608 vs 774) - interruption does not slow the agent here.
+
+The payload screen (try-harder / goal / goal+rules / challenge), the
+skill arms (the owner's challenge protocol, in-context vs out-of-band)
+and a monitor swap (Haiku -> gpt-oss-120b, a real reasoner at 1/25th
+the price) are queued on the same band. If try-harder matches
+challenge, content is irrelevant and the whole effect is interruption.
+
+---
+
 ## 2026-08-28 — maths arms: the first positive signal, not yet a conclusion
 
 New harness in `evals/math/`: MATH-500 problems scored against answer keys
