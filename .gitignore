@@ -15,3 +15,6 @@ __pycache__/
 # evals/results.md and evals/results/<date>/ - so a run stays re-derivable.
 evals/impossiblebench/.dk_mem/
 evals/impossiblebench/logs/
+
+# The hooked sandbox stages a copy of the plugin at build time.
+evals/hooked/plugin/

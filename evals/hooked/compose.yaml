@@ -1,0 +1,10 @@
+services:
+  default:
+    image: dk-hooked
+    build: .
+    command: "tail -f /dev/null"
+    init: true
+    # The monitor's own model call needs egress; the tripwire and recall
+    # hooks do not. network_mode: none would silence dk_watch entirely.
+    stop_grace_period: 1s
+    mem_limit: 2gb
