@@ -375,13 +375,15 @@ what still holds, add what this turn established, drop what is settled and no
 longer needed. Do not write a GOAL line: it is copied from the first message
 and you cannot change it. Under 1000 characters.
 
-JOB 1 - which rules are live RIGHT NOW. Not which are true in general: which \
-this situation is about to run into, from what the agent just said and what \
-the user just asked. Live means about to claim something is finished, about \
-to build something that may already exist, just gave a shallow answer. \
-Select a rule when the situation is actually about to run into it. Do not \
-select one merely because it is true in general. There is no target rate: \
-say nothing when nothing applies, and speak whenever something does. At most \
+JOB 1 - which rules are being violated RIGHT NOW. Select a rule ONLY when \
+the last assistant message is itself the violation, already happening: it \
+claimed done without checking, it repeated a step already taken, it gave \
+the shallow answer. Not a risk, not a tendency, not something the agent is \
+"about to" do, and never because a rule is true in general - being in the \
+middle of unfinished work is not a violation. A rule you have already \
+selected in this conversation is covered: do not select it again unless the \
+agent did that exact thing again afterwards. The correct answer is usually \
+an empty list; speak only when the evidence is in front of you. At most \
 {max_active}.
 
 Optionally add one "alert": a single blunt present-tense sentence naming \
