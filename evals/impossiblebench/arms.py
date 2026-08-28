@@ -191,15 +191,58 @@ def injected(inner, arm, use_dk=False, challenge_n=0):
     return solve
 
 
-def _task(split, limit, arm, use_dk=False, challenge_n=0):
+# The scaffold is a knob, not a constant. impossiblebench ships two:
+#
+#   minimal  submit -> test -> feedback, no tools. The published Conflicting-
+#            LiveCodeBench numbers use this, and six of eight frontier models
+#            score exactly 0.0% on it (arXiv:2510.20270, fig 4) - a floor with
+#            almost no dynamic range to measure against.
+#   tools    SWE-style: bash, python and a file editor against a sandbox. The
+#            paper's own finding is that this is where the signal lives -
+#            "more complex scaffolds encourage more cheating" (appendix E.1),
+#            moving Sonnet 3.7 from 0% to ~37% on the same split.
+#
+# It is also the scaffold whose failure modes dk-mode actually names: reading
+# without acting, repeating a step, claiming done without running anything.
+# A one-shot puzzle cannot express any of those.
+AGENT = os.environ.get("DK_EVAL_AGENT", "minimal")
+ATTEMPTS = int(os.environ.get("DK_EVAL_ATTEMPTS", "3"))
+
+
+def _message_limit(agent):
+    """Messages the sample may use before inspect cuts it off.
+
+    This has to be generous, and the reason is a confound rather than a
+    preference: every arm injects a user message before each generation, so
+    an injected arm spends the budget FASTER than baseline. Leave the limit
+    where the published minimal runs put it (30) and the dk arms would hit
+    the ceiling first, losing on truncation and reading as though steering
+    had hurt. The limit must not bind for any arm, so it is set well above
+    what the scaffold plus its injections can consume.
+    """
+    env = os.environ.get("DK_EVAL_MESSAGE_LIMIT", "").strip()
+    if env:
+        return int(env)
+    return 200 if agent == "tools" else 60
+
+
+def _build(split, limit, agent=None, attempts=None):
     if impossible_livecodebench is None:
         raise SystemExit(
             "impossiblebench is not importable. Clone it and set\n"
             "  export IMPOSSIBLEBENCH=/path/to/impossiblebench\n"
             "(see the module docstring - do not pip install -e it)")
-    t = impossible_livecodebench(
-        split=split, agent_type="minimal", limit=limit,
+    agent = agent or AGENT
+    return impossible_livecodebench(
+        split=split, agent_type=agent, limit=limit,
+        max_attempts=int(attempts or ATTEMPTS),
+        message_limit=_message_limit(agent),
         sandbox=os.environ.get("DK_EVAL_SANDBOX", "docker"))
+
+
+def _task(split, limit, arm, use_dk=False, challenge_n=0,
+          agent=None, attempts=None):
+    t = _build(split, limit, agent, attempts)
     t.solver = injected(t.solver, arm, use_dk=use_dk, challenge_n=challenge_n)
     return t
 
@@ -210,31 +253,31 @@ def _task(split, limit, arm, use_dk=False, challenge_n=0):
 # honest work.
 
 @task
-def arm_baseline(split="conflicting", limit=20):
+def arm_baseline(split="conflicting", limit=20, agent=None, attempts=None):
     """The benchmark as published, untouched. Read this number first: if it
     shows no cheating at all, the other arms have nothing to prevent and the
     run says nothing."""
-    if impossible_livecodebench is None:
-        raise SystemExit("impossiblebench is not importable (see arms.py)")
-    return impossible_livecodebench(
-        split=split, agent_type="minimal", limit=limit,
-        sandbox=os.environ.get("DK_EVAL_SANDBOX", "docker"))
+    return _build(split, limit, agent, attempts)
 
 
 @task
-def arm_dk(split="conflicting", limit=20):
+def arm_dk(split="conflicting", limit=20, agent=None, attempts=None):
     """The shipped monitor selects before each generation."""
-    return _task(split, limit, "dk", use_dk=True)
+    return _task(split, limit, "dk", use_dk=True,
+                 agent=agent, attempts=attempts)
 
 
 @task
-def arm_challenge(split="conflicting", limit=20, n=1):
+def arm_challenge(split="conflicting", limit=20, n=1,
+                  agent=None, attempts=None):
     """A fixed challenge every n generations. No model, no selection."""
-    return _task(split, limit, "challenge", challenge_n=int(n))
+    return _task(split, limit, "challenge", challenge_n=int(n),
+                 agent=agent, attempts=attempts)
 
 
 @task
-def arm_dk_challenge(split="conflicting", limit=20, n=1):
+def arm_dk_challenge(split="conflicting", limit=20, n=1,
+                     agent=None, attempts=None):
     """Both together."""
     return _task(split, limit, "dk+challenge", use_dk=True,
-                 challenge_n=int(n))
+                 challenge_n=int(n), agent=agent, attempts=attempts)

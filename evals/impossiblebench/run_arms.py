@@ -9,6 +9,10 @@ a climb is only real if last month's number can be re-derived.
 
     --arms baseline,dk,challenge,dk_challenge   (default: all four)
     --split conflicting|oneoff|original         (default: conflicting)
+    --agent minimal|tools    scaffold. minimal is the published default and a
+                     near-floor on conflicting/livecodebench; tools is the
+                     SWE-style scaffold where the paper finds the signal.
+    --attempts N     submissions per sample (default 3; the paper uses 10)
     --limit N        first N samples - the frozen subset (default 20)
     --challenge-n K  fixed text on generation 1 and every Kth after (default 1)
     --model M        the agent under test. claude-cli/<name> uses the local
@@ -50,6 +54,13 @@ def main():
     ap.add_argument("--limit", type=int, default=20)
     ap.add_argument("--challenge-n", type=int, default=1)
     ap.add_argument("--model", default="anthropic/claude-haiku-4-5")
+    ap.add_argument("--agent", default=os.environ.get("DK_EVAL_AGENT",
+                                                      "minimal"),
+                    choices=["minimal", "tools"],
+                    help="scaffold: minimal (submit/feedback, no tools) or "
+                         "tools (SWE-style bash + file editor)")
+    ap.add_argument("--attempts", type=int, default=3,
+                    help="submissions allowed per sample (paper uses 10)")
     ap.add_argument("--epochs", type=int, default=1)
     ap.add_argument("--no-record", action="store_true")
     args = ap.parse_args()
@@ -82,11 +93,13 @@ def main():
 
     rows = []
     for arm in wanted:
-        kw = {"split": args.split, "limit": args.limit}
+        kw = {"split": args.split, "limit": args.limit,
+              "agent": args.agent, "attempts": args.attempts}
         if "challenge" in arm:
             kw["n"] = args.challenge_n
         t = getattr(A, ARM_TASKS[arm])(**kw)
         print(f"\n=== {arm}  ({args.split}, limit {args.limit}, "
+              f"{args.agent} scaffold, {args.attempts} attempts, "
               f"model {args.model}) ===")
         logs = inspect_eval(t, model=args.model, epochs=args.epochs,
                             log_dir=log_dir, display="plain")
@@ -138,6 +151,7 @@ def main():
     with open(report, "w", encoding="utf-8") as f:
         json.dump({"date": stamp, "model": args.model, "split": args.split,
                    "limit": args.limit, "epochs": args.epochs,
+                   "agent": args.agent, "attempts": args.attempts,
                    "challenge_n": args.challenge_n, "rows": rows}, f, indent=1)
     print(f"\nfull report: {report}\ninspect logs: {log_dir}")
 
@@ -147,11 +161,12 @@ def main():
         with open(results_md, "a", encoding="utf-8") as f:
             if new:
                 f.write("# Eval results, one line per run\n\n"
-                        "| date | benchmark | split | limit | model | arm | "
-                        "score | dk_fired | notes |\n|---|---|---|---|---|"
-                        "---|---|---|---|\n")
+                        "| date | benchmark | split | agent | limit | "
+                        "model | arm | score | dk_fired | notes |\n"
+                        "|---|---|---|---|---|---|---|---|---|---|\n")
             for r in rows:
                 f.write(f"| {stamp} | impossiblebench | {args.split} | "
+                        f"{args.agent}/{args.attempts} | "
                         f"{args.limit} | {args.model} | {r['arm']} | "
                         f"{r.get('score', '-')} | {r['dk_fired']} | "
                         f"{'cli-smoke' if args.model.startswith('claude-cli') else ''} |\n")
