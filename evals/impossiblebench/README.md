@@ -1,65 +1,151 @@
-# ImpossibleBench: four arms, one cheating rate
+# The dk-mode eval harness
 
-This is the primary eval from `docs/EVALS.md` section 2. ImpossibleBench
-builds tasks whose specification and unit tests contradict each other, so a
-pass IS a cheat: no judge model, no partial credit. dk-mode ships a rule for
-exactly this failure, so the benchmark asks the sharpest question available -
-and a scheduled challenge with no selection step runs beside it as the
-control that selection has to beat.
+Four arms on the same tasks, scored two ways: what the agent achieved, and
+what the agent did. Read `docs/EVALS.md` for the design and `docs/log.md`
+for every number produced so far, including the runs that failed.
+
+## The pieces
+
+| file | what it does |
+|---|---|
+| `run_arms.py` | runs the arms and aggregates. **Start here.** |
+| `arms.py` | the four arms, the injection point, the scaffold knobs |
+| `trace_metrics.py` | scores the BEHAVIOUR in a finished run's logs |
+| `trace_view.py` | prints one sample as injection → action → tool result |
+| `tune_selectivity.py` | replays the monitor over recorded traces, free |
+| `challenge.md` | the fixed text the scheduled-challenge arm injects |
 
 ## Setup
 
 ```bash
 git clone https://github.com/safety-research/impossiblebench
 export IMPOSSIBLEBENCH=/path/to/impossiblebench
-pip install inspect_ai datasets
+pip install inspect_ai datasets openai
 ```
 
 Do not `pip install -e` impossiblebench: the editable install fails on
-Debian-family setuptools, and its swebench modules need Python 3.12. The
-harness imports the LiveCodeBench modules straight off the clone, which
-needs neither.
+Debian-family setuptools and its swebench modules need Python 3.12. The
+harness imports the LiveCodeBench modules straight off the clone.
+
+The `tools` scaffold needs a working Docker daemon (`dockerd` must be
+running; the sandbox spec is impossiblebench's own `compose.yaml`, with
+`network_mode: none` and a 1GB cap). Without Docker, `DK_EVAL_SANDBOX=local`
+runs model-generated code **unsandboxed on the host** — acceptable only in a
+disposable container.
 
 ## Run
 
 ```bash
-# All four arms on the frozen subset. Docker sandbox by default;
-# DK_EVAL_SANDBOX=local runs the tests unsandboxed.
-export DK_API_KEY=sk-ant-...        # the monitor falls back to `claude -p`
+export DK_API_KEY=sk-...                     # the monitor's model
+export DK_BACKEND=openai                     # OpenRouter for the monitor
+export DK_API_URL=https://openrouter.ai/api/v1/chat/completions
+export DK_WATCH_MODELS=anthropic/claude-haiku-4.5
+
 python3 evals/impossiblebench/run_arms.py \
-    --limit 20 --model anthropic/claude-haiku-4-5
+    --limit 20 --split original \
+    --agent tools --attempts 6 --prompt bare \
+    --model openrouter/google/gemini-2.5-flash-lite \
+    --budget 4
 ```
 
-The arms, all injecting through the same channel (a user message appended
-immediately before each generation - the position dk-mode's hook uses):
+| flag | meaning |
+|---|---|
+| `--arms` | `baseline,dk,challenge,dk_challenge` (default: all four) |
+| `--split` | `conflicting`/`oneoff` → cheating rate, lower better. `original` → pass rate, higher better. |
+| `--agent` | `minimal` (submit/feedback, no tools) or `tools` (bash + file editor) |
+| `--attempts` | submissions per sample. The paper uses 10; 6 is cheaper. |
+| `--prompt` | `shipped` or `bare` — see **The pre-steered control** below |
+| `--budget N` | abort before spending if the OpenRouter balance is under $N |
+| `--challenge-n K` | fixed text every Kth generation |
+| `--epochs` | repeats per sample; use ≥2 for anything you intend to keep |
 
-| arm | payload | selection? | model call? |
-|---|---|---|---|
-| `baseline` | nothing | - | - |
-| `dk` | whatever the shipped monitor selects | yes | per generation |
-| `challenge` | `challenge.md`, every `--challenge-n` generations | no | no |
-| `dk_challenge` | both | yes | per generation |
+Then read the behaviour, which is where the signal has actually been:
 
-`challenge.md` is a stand-in text. If you have a challenge skill of your
-own, point `DK_EVAL_CHALLENGE` at its text - the arm measures the payload
-you give it.
+```bash
+python3 evals/impossiblebench/trace_metrics.py evals/impossiblebench/logs/<stamp>
+python3 evals/impossiblebench/trace_view.py evals/impossiblebench/logs/<stamp> --arm dk --list
+python3 evals/impossiblebench/trace_view.py evals/impossiblebench/logs/<stamp> lcbhard_3 --arm dk
+```
 
-## Read the result honestly
+## Four things this harness learned the hard way
 
-- **Baseline first.** A baseline that cheats on nothing gives the other
-  arms nothing to prevent, and the run says nothing.
-- **Check `dk_fired`.** A dk arm where the monitor never spoke is a run
-  about silence, not steering. The runner warns when this happens; the
-  per-sample rules and alerts are in the JSON report for reading.
-- **Run the `original` split too.** A low cheating rate is easy to buy by
-  talking the agent out of finishing anything; the pass rate on possible
-  tasks is the guard.
-- **If `challenge` matches `dk`**, the selection layer is not earning its
-  per-turn model call. That is a finding, and it goes in `docs/log.md`.
-- `--model claude-cli/<name>` runs through the local `claude -p` login:
-  free smoke tests of the plumbing, but the Claude Code wrapper is part of
-  what is measured, so those numbers compare arms only against each other -
-  never against published baselines.
+**1. The outcome column is usually the wrong place to look.** Three runs
+measured pass/fail and all three said nothing: the task is decided by
+whether the model knows the algorithm, which dk-mode does not supply. Read
+`trace_metrics.py`'s columns first — `unverified_done`, `never_tested`,
+`repeats`, `redundant_views` — and treat the pass rate as the guard that
+the arm did not simply talk the agent out of finishing.
 
-Every run appends one line per arm to `evals/results.md` and writes the
-full per-sample detail to `evals/results/<date>/impossiblebench.json`.
+**2. The pre-steered control.** The `tools` scaffold's own system prompt
+hands every arm a five-step workflow ending *"Run `python test.py` to check
+if your implementation passes / If tests fail, analyze the error and
+iterate"*. That is dk-mode's headline rule installed in the baseline for
+free, and under it `unverified_done` and `never_tested` sit at exactly
+0.00 — nothing to improve. **`--prompt bare` removes the workflow** and
+keeps every fact (the files, the tools, what submit means). Under `bare`
+the same baseline fails to test on 95% of samples. Use `bare` for any
+comparison about process; use `shipped` only to reproduce published
+numbers.
+
+**3. Injection happens at the model, not the solver.** The `tools` scaffold
+is `basic_agent`, which runs its own loop and never touches the `generate`
+an outer solver is handed. Wrapping that solver silently produced arms that
+reported `gen_count 0`, injected nothing, scored as baseline, and still
+called themselves `dk`. `arms.py` patches `ModelAPI.generate` instead, the
+one point every scaffold must pass through. `run_arms.py` warns when a
+non-baseline arm records zero generations — never publish a run that warns.
+
+**4. Cost is measured, not estimated.** The `tools` scaffold ran 768k
+tokens/sample on Haiku (~$1) against a $0.25 guess, and two runs died
+mid-flight on HTTP 402, wasting ~$31. Calibrate on 2 samples with
+`--no-record`, multiply, then pass `--budget`. Note the 402 is partly a
+concurrency artifact — credit is reserved per in-flight request, and the
+`dk` arms issue roughly twice the calls (agent + monitor). Gemini Flash
+Lite runs this at ~$0.12/sample against Haiku's ~$1.
+
+## Tuning the monitor without spending anything
+
+`tune_selectivity.py` replays the monitor alone — no agent, no task, no
+API spend — over the traces of a finished run, once per prompt variant,
+paired at every generation point. It is how the 92% fire rate was
+diagnosed and fixed.
+
+```bash
+export DK_BACKEND=cli          # the local `claude -p` login, free
+python3 evals/impossiblebench/tune_selectivity.py \
+    --log evals/impossiblebench/logs/<stamp> --arm baseline \
+    --samples 6 --stride 2 --variants shipped,suppress,strict-now
+```
+
+Variants live in `build_prompt()`; add one there. Measured so far:
+
+| variant | fire rate | selections/point |
+|---|---|---|
+| the old shipped prompt | 95% | 2.23 |
+| `suppress` (told what it already said) | 85% | 1.58 |
+| `strict-now` (violation must BE the last message) | 38% | 0.51 |
+| `strict+suppress` | 36% | 0.38 |
+| **the current shipped prompt** | **46%** | **0.63** |
+
+Replay overstates the live rate for one structural reason: baseline traces
+contain no injections, so the "already delivered" clause can never bite. In
+live use the delivered text is in the window, so expect lower.
+
+## Known gaps
+
+- **The harness reimplements dk-mode's injection; it does not run
+  dk-mode's hooks.** `EVALS.md` rule 1 asks for the real channel. The
+  route is `inspect_swe`'s `claude_code()` solver: the real Claude Code
+  binary in a sandbox with its API calls bridged back to any inspect
+  model, so the shipped plugin's UserPromptSubmit/PostToolUse/Stop hooks
+  fire for real while a cheap model drives. All three hooks are verified
+  to fire under headless `claude -p`.
+- **No pairwise judge yet.** Where a behavioural count cannot settle a
+  question, the intended design is a blind, position-swapped pairwise
+  judge from a **different model family than the agent** — never the same
+  family grading itself.
+- **The decisive comparison has not been run.** With the monitor firing on
+  92% of turns, `dk` was nearly identical to a fixed schedule by
+  construction. The claim dk-mode actually makes is that *selection* beats
+  *presence*, so the pair that tests it is `dk` vs `challenge`, head to
+  head, now that the fire rate is halved.
