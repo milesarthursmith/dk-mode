@@ -6,6 +6,55 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-28 — maths arms: the first positive signal, not yet a conclusion
+
+New harness in `evals/math/`: MATH-500 problems scored against answer keys
+with deterministic equivalence (math_verify), so completion needs no judge
+and no trusted test suite. Two stages: baseline alone over 120 level-4/5
+problems x 3 epochs finds the BAND - the 23 problems the model passes
+sometimes - and the arms then run on those ids with fresh epochs, because
+selecting and evaluating on the same coin flips would bake luck in.
+
+Why the band is the right instrument, checked before spending: of 32
+failing band epochs, 16 never touched the python tool - pure assertion -
+and several gave up asking for input on fully-specified problems they
+solved in other epochs. Process failures on solvable tasks: exactly the
+shape dk-mode claims to fix, occurring naturally at high rate.
+
+Injection quality, read by hand first: on maths the tuned monitor fired on
+3% of generations across a probe run (the rules are coding-flavoured, so
+silence is correct), and its one alert named the agent's actual error -
+"claims b=3 based on approximate floating-point computation without
+verifying" - correctly and specifically.
+
+The comparison: 23 band problems x 3 arms x 3 fresh epochs, Flash Lite as
+agent, Haiku as monitor.
+
+    arm         mean   pass^3   pass@3   fire rate   injected chars
+    baseline    0.59     9/23    18/23           -                0
+    dk          0.67    12/23    17/23    33/217=15%         15,018
+    challenge   0.70    12/23    20/23    96/213=45%         59,424
+
+Paired per task: dk beat baseline on 7, lost 4, tied 12 (sign test
+p=0.55); challenge 9/6/8 (p=0.61); dk vs challenge 5/7/11. Both injection
+arms are up on mean and pass^3; nothing reaches significance at n=23.
+
+Read with both eyes open:
+
+- The direction is the first positive signal any run has produced, on the
+  first instrument with verified headroom. It is consistent across mean,
+  pass^3 and the paired counts for both injected arms.
+- The dumb schedule is slightly AHEAD of selection on mean and pass@3.
+  What selection bought was cost, not outcome: dk matched challenge's
+  pass^3 with a quarter of the injected characters and a third of the
+  fire rate. On this evidence presence helps; selection economises.
+  EVALS.md said that outcome goes on the table if it appears - here it is.
+- n=23 with p around 0.5 means this could still be noise. The next run
+  buys power, cheaply: widen the band from the remaining level-4/5 pool
+  and run 5 epochs. At $0.0015 a sample, significance costs about $2.
+
+---
+
 ## 2026-08-28 — eval harness: instrument fixed, selectivity measured and cut
 
 First runs against a paid API. Agent under test: Gemini 2.5 Flash Lite via

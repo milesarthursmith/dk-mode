@@ -35,3 +35,6 @@ SWE-style scaffold (bash, python, file editor) with ten submissions.
 | 2026-08-28_0652 | impossiblebench | original | tools/6/bare | 20 | openrouter/google/gemini-2.5-flash-lite | baseline | 0.15 | 0 | 3/20. never_tested 0.95, repeats 13.2 |
 | 2026-08-28_0652 | impossiblebench | original | tools/6/bare | 20 | openrouter/google/gemini-2.5-flash-lite | dk | 0.15 | 639 | tie (paired 2-2). fired 92% of 693 gens; repeats 24.5, steps +62% |
 | 2026-08-28_0652 | impossiblebench | original | tools/6/bare | 20 | openrouter/google/gemini-2.5-flash-lite | challenge | - | 0 | ABORTED: 402, balance exhausted |
+| 2026-08-28_1355 | math500-band | band(23) | agentic/3ep | 23 | openrouter/google/gemini-2.5-flash-lite | baseline | 0.59 | 0 | pass^k 9/23 |
+| 2026-08-28_1355 | math500-band | band(23) | agentic/3ep | 23 | openrouter/google/gemini-2.5-flash-lite | dk | 0.67 | 33 | pass^k 12/23 |
+| 2026-08-28_1355 | math500-band | band(23) | agentic/3ep | 23 | openrouter/google/gemini-2.5-flash-lite | challenge | 0.70 | 0 | pass^k 12/23 |
