@@ -35,7 +35,9 @@ difference is what speaks:
               if a schedule matches selection, the per-turn model call is
               not earning its place.
 
-Run (needs Docker running and credits):
+Run (needs Docker running, credits, and `pip install inspect-swe
+anthropic` - the host-side bridge translates Claude Code's Anthropic-API
+requests with the anthropic SDK and fails without it):
 
     python3 -m inspect_ai eval evals/hooked/arms_hooked.py@dk \\
         --model openrouter/google/gemini-2.5-flash-lite --limit 10

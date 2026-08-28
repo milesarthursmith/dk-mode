@@ -6,6 +6,28 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-28 — the shipped plugin verified end to end under real Claude Code
+
+evals/hooked had its first successful flight: a real Claude Code binary in
+a Docker sandbox, its API calls bridged to Gemini Flash Lite, with dk-mode
+installed as a real plugin - and the transcripts contain the
+<self-steering> blocks its UserPromptSubmit hook injected. Two samples,
+one scored correct, hooks firing as processes on real sessions. EVALS.md
+rule 1 - the real channel, not a reimplementation - is now met, for about
+ten cents.
+
+Two blockers found and cleared on the way, both recorded in the module:
+Claude Code validates the model id it is TOLD and rejects non-Anthropic
+names, so the presented identity is pinned (model_config) while the bridge
+serves the cheap model; and the host-side bridge needs the anthropic SDK
+installed or every request fails with an empty agent error.
+
+What this buys: the maths ablations can keep iterating on the cheap
+patched-API harness, and whatever configuration wins graduates to this
+harness for confirmation under the shipped plumbing.
+
+---
+
 ## 2026-08-28 — the power run: dk's edge was noise; the schedule's survives, weakly
 
 Band widened to 46 flaky problems (from 220 banded), arms re-run at 5
