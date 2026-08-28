@@ -234,6 +234,14 @@ def _payload_for(state, messages, use_dk, challenge_n):
     text = "\n\n".join(parts)
     state.metadata["injected_chars"] = \
         state.metadata.get("injected_chars", 0) + len(text)
+    # The payload itself, keyed by generation. The ModelAPI patch appends
+    # below the layer where inspect records model input, so without this the
+    # injected text reaches the provider but never appears in the .eval file
+    # - the run that found the 92% fire rate could not show a single
+    # injection next to the agent's reaction. Capped per entry; the totals
+    # above stay exact.
+    state.metadata.setdefault("dk_payload_log", []).append(
+        {"gen": n, "text": text[:2000]})
     return text
 
 
