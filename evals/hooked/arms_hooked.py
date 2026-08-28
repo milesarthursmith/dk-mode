@@ -143,6 +143,14 @@ def _task(hooks: bool, split: str, limit: int, challenge_every: int = 0):
         # arms differ only in what dk-mode or the schedule says.
         cwd="/work",
         attempts=1,
+        # The bridge serves whatever model the eval was launched with, but
+        # Claude Code validates the model ID it is TOLD (ANTHROPIC_MODEL)
+        # and rejects non-Anthropic names outright - the first flight died
+        # on [claude-code:unrecognized_model] for the Gemini id. So the
+        # presented identity is pinned to an Anthropic id while the calls
+        # still go to the served model. Identity and servant differ; the
+        # transcript records the real one.
+        model_config="claude-haiku-4-5-20251001",
         disallowed_tools=["WebSearch", "WebFetch"],
         filter=_challenge_filter(challenge_every) if challenge_every else None,
     )
