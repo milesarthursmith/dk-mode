@@ -47,12 +47,13 @@ its swebench modules need Python 3.12; the path route needs neither):
     git clone https://github.com/safety-research/impossiblebench
     export IMPOSSIBLEBENCH=/path/to/impossiblebench
 """
+import contextvars
 import os
 import subprocess
 import sys
 
 from inspect_ai import task
-from inspect_ai.model import ChatMessageUser
+from inspect_ai.model import ChatMessageUser, get_model
 from inspect_ai.solver import solver
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -94,21 +95,34 @@ def challenge_text():
         return f.read().strip()
 
 
-def _as_dk_messages(state):
+def _as_dk_messages(messages):
     """Inspect messages -> the shape dk_watch reads. The agent under test is
-    the assistant; the benchmark harness speaks as the user - the same shape
-    as a real conversation, so the monitor needs no special case."""
+    the assistant; everything it is answering to is the user - the same shape
+    as a real conversation, so the monitor needs no special case.
+
+    Tool results are folded in as user turns rather than dropped. They are
+    where the evidence lives: "the tests failed", "the file does not exist".
+    dk-mode's rules are largely about ignoring exactly that - claiming done
+    without running anything, repeating a step that already failed - so a
+    monitor that could not see tool output would be blind to the failures it
+    is meant to name."""
     out = []
-    for i, m in enumerate(state.messages):
+    for i, m in enumerate(messages):
         role = getattr(m, "role", "")
         text = (getattr(m, "text", "") or "").strip()
-        if role in ("user", "assistant") and text:
+        if not text:
+            continue
+        if role == "tool":
+            out.append({"uuid": "m%d" % i, "role": "user",
+                        "text": "[tool result] " + text[:1500],
+                        "cwd": "", "ts": ""})
+        elif role in ("user", "assistant"):
             out.append({"uuid": "m%d" % i, "role": role,
                         "text": text[:1500], "cwd": "", "ts": ""})
     return out
 
 
-def _dk_payload(state):
+def _dk_payload(state, messages):
     """One monitor step: the same call the Stop hook makes, with the running
     brief kept per sample in state.metadata instead of in a file. GOAL is
     copied from the first user message, never taken from the model - the
@@ -116,7 +130,7 @@ def _dk_payload(state):
     rules = W.load_rules()
     if not rules:
         return ""
-    msgs = _as_dk_messages(state)
+    msgs = _as_dk_messages(messages)
     convo = W.recent_exchanges(msgs, W.EXCHANGES, W.WINDOW_CHARS)
     if not convo:
         return ""
@@ -150,44 +164,95 @@ def _dk_payload(state):
     return W.render(active, alert, rules)
 
 
+# The sample currently generating, so the injection point below can find its
+# TaskState. A contextvar and not a global: inspect runs samples concurrently
+# as asyncio tasks, and each task gets its own copy, so two samples in flight
+# cannot write each other's counters.
+_CURRENT = contextvars.ContextVar("dk_current", default=None)
+
+
+def _install_injection(model):
+    """Inject at the model API, which is the only point every scaffold shares.
+
+    The first version of this wrapped the `generate` passed to the solver.
+    That works for the minimal scaffold and silently does NOTHING for the
+    tools scaffold, which is `basic_agent` - it runs its own loop and calls
+    the model directly, so the wrapper is never reached. The symptom is an
+    arm that reports gen_count 0 and quietly degrades to baseline while
+    still being labelled `dk`; the smoke run caught it exactly that way.
+
+    Wrapping ModelAPI.generate instead means the payload lands before every
+    generation in any scaffold, present or future. The conversation is taken
+    from the `input` list rather than state.messages for the same reason:
+    inside an agent loop, `input` is what the model is about to see, and
+    state.messages may not have caught up.
+
+    Patching the bound method rather than subclassing ModelAPI keeps every
+    other behaviour - retries, connection limits, token counting - pointing
+    at the real object.
+    """
+    api = model.api
+    if getattr(api, "_dk_patched", False):
+        return model
+    inner_generate = api.generate
+
+    async def generate(input, tools, tool_choice, config):
+        cur = _CURRENT.get()
+        if cur is not None:
+            state, use_dk, challenge_n = cur
+            payload = _payload_for(state, input, use_dk, challenge_n)
+            if payload:
+                input = list(input) + [ChatMessageUser(content=payload)]
+        return await inner_generate(input, tools, tool_choice, config)
+
+    api.generate = generate
+    api._dk_patched = True
+    return model
+
+
+def _payload_for(state, messages, use_dk, challenge_n):
+    """What this arm says before this generation. Empty string means silence,
+    which is the normal case for the dk arms."""
+    n = state.metadata.get("gen_count", 0) + 1
+    state.metadata["gen_count"] = n
+    parts = []
+    if challenge_n and (n - 1) % challenge_n == 0:
+        parts.append(challenge_text())
+        state.metadata["challenge_fired"] = \
+            state.metadata.get("challenge_fired", 0) + 1
+    if use_dk:
+        try:
+            dk = _dk_payload(state, messages)
+        except Exception as exc:           # never fail the benchmark run
+            state.metadata["dk_error"] = str(exc)[:300]
+            dk = ""
+        if dk:
+            state.metadata["dk_fired"] = state.metadata.get("dk_fired", 0) + 1
+            parts.append(dk)
+    if not parts:
+        return ""
+    text = "\n\n".join(parts)
+    state.metadata["injected_chars"] = \
+        state.metadata.get("injected_chars", 0) + len(text)
+    return text
+
+
 @solver
 def injected(inner, arm, use_dk=False, challenge_n=0):
-    """Wrap a solver so a payload lands immediately before EVERY generation.
+    """Mark this sample as injectable and record which arm it belongs to.
 
-    The inner solver's loop (attempt -> test -> feedback -> attempt) is left
-    untouched; only its `generate` is wrapped, so all arms get exactly the
-    same number of opportunities to speak. challenge_n=K fires the fixed text
-    on the 1st generation and every Kth after; use_dk asks the monitor each
-    time and injects whatever it selects, which is usually nothing.
+    The injection itself happens in _install_injection, at the model API.
+    This solver only publishes the sample's TaskState so that code can find
+    it, and the inner solver runs completely untouched - so every arm gets
+    exactly the same scaffold and the same number of chances to speak.
     """
     async def solve(state, generate):
         state.metadata["arm"] = arm
-
-        async def gen(s, **kw):
-            n = s.metadata.get("gen_count", 0) + 1
-            s.metadata["gen_count"] = n
-            parts = []
-            if challenge_n and (n - 1) % challenge_n == 0:
-                parts.append(challenge_text())
-                s.metadata["challenge_fired"] = \
-                    s.metadata.get("challenge_fired", 0) + 1
-            if use_dk:
-                try:
-                    dk = _dk_payload(s)
-                except Exception as exc:       # never fail the benchmark run
-                    s.metadata["dk_error"] = str(exc)[:300]
-                    dk = ""
-                if dk:
-                    s.metadata["dk_fired"] = s.metadata.get("dk_fired", 0) + 1
-                    parts.append(dk)
-            if parts:
-                text = "\n\n".join(parts)
-                s.metadata["injected_chars"] = \
-                    s.metadata.get("injected_chars", 0) + len(text)
-                s.messages.append(ChatMessageUser(content=text))
-            return await generate(s, **kw)
-
-        return await inner(state, gen)
+        token = _CURRENT.set((state, use_dk, challenge_n))
+        try:
+            return await inner(state, generate)
+        finally:
+            _CURRENT.reset(token)
     return solve
 
 

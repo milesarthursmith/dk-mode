@@ -79,6 +79,13 @@ def main():
     import claude_cli                                    # noqa: F401
     import arms as A
     from inspect_ai import eval as inspect_eval
+    from inspect_ai.model import get_model
+
+    # One model object, patched once, shared by every arm. The patch is what
+    # injects; it is inert on baseline because that arm's solver never
+    # publishes a TaskState for it to find. Passing the object rather than
+    # the string is what makes the patch reachable at all.
+    model = A._install_injection(get_model(args.model))
 
     wanted = [a.strip() for a in args.arms.split(",") if a.strip()]
     unknown = [a for a in wanted if a not in ARM_TASKS]
@@ -101,7 +108,7 @@ def main():
         print(f"\n=== {arm}  ({args.split}, limit {args.limit}, "
               f"{args.agent} scaffold, {args.attempts} attempts, "
               f"model {args.model}) ===")
-        logs = inspect_eval(t, model=args.model, epochs=args.epochs,
+        logs = inspect_eval(t, model=model, epochs=args.epochs,
                             log_dir=log_dir, display="plain")
         log = logs[0]
         row = {"arm": arm, "status": log.status}
@@ -139,6 +146,13 @@ def main():
         print(f"{r['arm']:<14} {score:<36} {r['gen_count']:<5} "
               f"{r['dk_fired']:<9} {r['challenge_fired']:<10} "
               f"{r['injected_chars']}")
+    silent = [r for r in rows
+              if r["arm"] != "baseline" and r["gen_count"] == 0]
+    if silent:
+        print("\nWARNING: no generations were seen for "
+              f"{', '.join(r['arm'] for r in silent)}. The injection point "
+              "did not fire, so these arms ran as baseline. Do not report "
+              "them as steering results.")
     dk_rows = [r for r in rows if "dk" in r["arm"]]
     if dk_rows and all(r["dk_fired"] == 0 for r in dk_rows):
         print("\nWARNING: the monitor never spoke. This run says nothing "
