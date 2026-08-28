@@ -104,6 +104,10 @@ def build_prompt(variant, delivered):
         return base[:i] + block + "\n" + base[i:]
     if variant == "strict-now":
         return base[:i] + STRICT_BLOCK + "\n" + base[i:]
+    if variant == "strict+suppress":
+        block = SUPPRESS_BLOCK.format(
+            delivered=", ".join(sorted(delivered)) or "(nothing yet)")
+        return base[:i] + STRICT_BLOCK + block + "\n" + base[i:]
     raise ValueError(variant)
 
 
