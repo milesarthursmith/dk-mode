@@ -141,7 +141,53 @@ PAYLOADS = {
     "goal+rules": lambda state: (
         "Restating your task, verbatim:\n\n" + _first_user_text(state)
         + "\n\n<self-steering>\n" + _static_note() + "\n</self-steering>"),
+    # the owner's challenge skill protocol, injected as-is for the agent to
+    # answer in-context. The agent marks its own homework here; the
+    # `challenger` mode below is the out-of-band version of the same skill.
+    "challenge-skill": lambda state: _skill_text(),
 }
+
+
+SKILL_PATH = os.path.join(REPO, "evals", "payloads", "challenge_skill.md")
+
+
+def _skill_text():
+    with open(SKILL_PATH, encoding="utf-8") as f:
+        return f.read().strip()
+
+
+CHALLENGER_PROMPT = """{skill}
+
+You are reviewing the transcript below, mid-task. Apply the six points to
+what the agent is doing RIGHT NOW. Be concrete: name the claim, the step,
+or the assumption you are attacking. Skip any point with nothing to say.
+Reply with the report only, under 1200 characters, no preamble.
+
+=== TRANSCRIPT (recent) ===
+{convo}"""
+
+
+def _challenger_payload(state, messages):
+    """The same skill run the way docs/log.md's open question proposed: by a
+    SEPARATE model reading the transcript, not by the agent grading itself.
+    One model call per firing - the same cost shape as the dk monitor, but
+    free-form adversarial review instead of rule selection. The skill's
+    web_search/read_file tools are not provided; it reviews the transcript
+    only, and that deviation is on record."""
+    msgs = _as_dk_messages(messages)
+    convo = W.recent_exchanges(msgs, W.EXCHANGES, W.WINDOW_CHARS)
+    if not convo:
+        return ""
+    state.metadata["challenger_calls"] = \
+        state.metadata.get("challenger_calls", 0) + 1
+    text = W.call_model(W.read_key(), CHALLENGER_PROMPT.format(
+        skill=_skill_text(),
+        convo="\n\n".join(f'[{m["role"]}] {m["text"]}' for m in convo)))
+    if not text:
+        state.metadata["dk_error"] = "; ".join(W.LAST_ERROR[-2:])[:300]
+        return ""
+    return ("<challenger-report>\n" + text.strip()[:1500]
+            + "\n</challenger-report>")
 
 
 def _as_dk_messages(messages):
@@ -248,9 +294,9 @@ def _install_injection(model):
     async def generate(input, tools, tool_choice, config):
         cur = _CURRENT.get()
         if cur is not None:
-            state, use_dk, challenge_n, payload_fn = cur
+            state, use_dk, challenge_n, payload_fn, challenger_n = cur
             payload = _payload_for(state, input, use_dk, challenge_n,
-                                   payload_fn)
+                                   payload_fn, challenger_n)
             if payload:
                 input = list(input) + [ChatMessageUser(content=payload)]
         return await inner_generate(input, tools, tool_choice, config)
@@ -260,7 +306,8 @@ def _install_injection(model):
     return model
 
 
-def _payload_for(state, messages, use_dk, challenge_n, payload_fn=None):
+def _payload_for(state, messages, use_dk, challenge_n, payload_fn=None,
+                 challenger_n=0):
     """What this arm says before this generation. Empty string means silence,
     which is the normal case for the dk arms."""
     n = state.metadata.get("gen_count", 0) + 1
@@ -270,6 +317,16 @@ def _payload_for(state, messages, use_dk, challenge_n, payload_fn=None):
         parts.append((payload_fn or PAYLOADS["challenge"])(state))
         state.metadata["challenge_fired"] = \
             state.metadata.get("challenge_fired", 0) + 1
+    if challenger_n and (n - 1) % challenger_n == 0:
+        try:
+            rep = _challenger_payload(state, messages)
+        except Exception as exc:           # never fail the benchmark run
+            state.metadata["dk_error"] = str(exc)[:300]
+            rep = ""
+        if rep:
+            state.metadata["challenge_fired"] = \
+                state.metadata.get("challenge_fired", 0) + 1
+            parts.append(rep)
     if use_dk:
         try:
             dk = _dk_payload(state, messages)
@@ -296,7 +353,8 @@ def _payload_for(state, messages, use_dk, challenge_n, payload_fn=None):
 
 
 @solver
-def injected(inner, arm, use_dk=False, challenge_n=0, payload="challenge"):
+def injected(inner, arm, use_dk=False, challenge_n=0, payload="challenge",
+             challenger_n=0):
     payload_fn = PAYLOADS[payload]
     """Mark this sample as injectable and record which arm it belongs to.
 
@@ -307,7 +365,8 @@ def injected(inner, arm, use_dk=False, challenge_n=0, payload="challenge"):
     """
     async def solve(state, generate):
         state.metadata["arm"] = arm
-        token = _CURRENT.set((state, use_dk, challenge_n, payload_fn))
+        token = _CURRENT.set((state, use_dk, challenge_n, payload_fn,
+                              challenger_n))
         try:
             return await inner(state, generate)
         finally:

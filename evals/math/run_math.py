@@ -129,6 +129,9 @@ def main():
     builders = {"baseline": lambda: M.baseline(ids=ids),
                 "dk": lambda: M.dk(ids=ids),
                 "challenge": sched("challenge"),
+                "challenge-skill": sched("challenge-skill"),
+                "challenger": lambda: M.challenger(ids=ids,
+                                                   n=args.challenge_n),
                 "try-harder": sched("try-harder"),
                 "goal": sched("goal"),
                 "goal+rules": sched("goal+rules")}

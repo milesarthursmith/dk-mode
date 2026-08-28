@@ -109,7 +109,8 @@ def answer_key():
 
 
 def _task(arm, use_dk=False, challenge_n=0, levels=(4, 5), limit=0,
-          ids=None, attempts=1, offset=0, payload="challenge"):
+          ids=None, attempts=1, offset=0, payload="challenge",
+          challenger_n=0):
     inner = basic_agent(
         init=system_message(SYSTEM),
         tools=[python(timeout=30)],
@@ -117,7 +118,7 @@ def _task(arm, use_dk=False, challenge_n=0, levels=(4, 5), limit=0,
     )
     if arm != "baseline":
         inner = injected(inner, arm, use_dk=use_dk, challenge_n=challenge_n,
-                         payload=payload)
+                         payload=payload, challenger_n=challenger_n)
     else:
         inner = injected(inner, arm)   # counters only; injects nothing
     return Task(
@@ -140,6 +141,14 @@ def baseline(limit=0, ids=None, offset=0):
 @task
 def dk(limit=0, ids=None):
     return _task("dk", use_dk=True, limit=int(limit) if limit else 0, ids=ids)
+
+
+@task
+def challenger(limit=0, ids=None, n=3):
+    """The challenge skill run out-of-band: a separate model reads the
+    transcript every n generations and injects its adversarial report."""
+    return _task("challenger", challenger_n=int(n),
+                 limit=int(limit) if limit else 0, ids=ids)
 
 
 @task
