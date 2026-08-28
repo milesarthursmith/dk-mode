@@ -47,6 +47,30 @@ ARM_TASKS = {
 }
 
 
+def _check_budget(need):
+    key = os.environ.get("OPENROUTER_API_KEY", "")
+    if not key:
+        print("note: --budget given but OPENROUTER_API_KEY is not set; "
+              "skipping the balance check")
+        return
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            "https://openrouter.ai/api/v1/credits",
+            headers={"Authorization": "Bearer " + key})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            d = json.load(r)["data"]
+        left = float(d["total_credits"]) - float(d["total_usage"])
+    except Exception as exc:
+        print(f"note: could not read the OpenRouter balance ({exc}); "
+              "continuing without the check")
+        return
+    print(f"OpenRouter balance: ${left:.2f} (need ${need:.2f})")
+    if left < need:
+        sys.exit(f"aborting before spending anything: ${left:.2f} available, "
+                 f"${need:.2f} needed. Top up, or lower --limit/--attempts.")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--arms", default="baseline,dk,challenge,dk_challenge")
@@ -61,9 +85,27 @@ def main():
                          "tools (SWE-style bash + file editor)")
     ap.add_argument("--attempts", type=int, default=3,
                     help="submissions allowed per sample (paper uses 10)")
+    ap.add_argument("--prompt", default=os.environ.get("DK_EVAL_PROMPT",
+                                                       "shipped"),
+                    choices=["shipped", "bare"],
+                    help="shipped: the scaffold's own system prompt, which "
+                         "hands every arm a test-it-first workflow. bare: "
+                         "the same setup with that workflow removed, so "
+                         "process discipline is the variable under test.")
+    ap.add_argument("--budget", type=float, default=0.0,
+                    help="abort before starting if the OpenRouter balance is "
+                         "below this many dollars")
     ap.add_argument("--epochs", type=int, default=1)
     ap.add_argument("--no-record", action="store_true")
     args = ap.parse_args()
+    os.environ["DK_EVAL_PROMPT"] = args.prompt
+
+    # A run that dies on HTTP 402 halfway through leaves arms with different
+    # sample counts, which is not a comparison and cannot be salvaged. That
+    # happened once and cost a full run, so the balance is checked against
+    # the estimate BEFORE any money is spent rather than after.
+    if args.budget:
+        _check_budget(args.budget)
 
     # The dk arms need a model for the monitor. Default to the CLI when no
     # key is set, so a keyless environment still runs - and say so, because
@@ -106,8 +148,8 @@ def main():
             kw["n"] = args.challenge_n
         t = getattr(A, ARM_TASKS[arm])(**kw)
         print(f"\n=== {arm}  ({args.split}, limit {args.limit}, "
-              f"{args.agent} scaffold, {args.attempts} attempts, "
-              f"model {args.model}) ===")
+              f"{args.agent} scaffold, {args.prompt} prompt, "
+              f"{args.attempts} attempts, model {args.model}) ===")
         logs = inspect_eval(t, model=model, epochs=args.epochs,
                             log_dir=log_dir, display="plain")
         log = logs[0]
@@ -166,6 +208,7 @@ def main():
         json.dump({"date": stamp, "model": args.model, "split": args.split,
                    "limit": args.limit, "epochs": args.epochs,
                    "agent": args.agent, "attempts": args.attempts,
+                   "prompt": args.prompt,
                    "challenge_n": args.challenge_n, "rows": rows}, f, indent=1)
     print(f"\nfull report: {report}\ninspect logs: {log_dir}")
 
@@ -180,7 +223,7 @@ def main():
                         "|---|---|---|---|---|---|---|---|---|---|\n")
             for r in rows:
                 f.write(f"| {stamp} | impossiblebench | {args.split} | "
-                        f"{args.agent}/{args.attempts} | "
+                        f"{args.agent}/{args.attempts}/{args.prompt} | "
                         f"{args.limit} | {args.model} | {r['arm']} | "
                         f"{r.get('score', '-')} | {r['dk_fired']} | "
                         f"{'cli-smoke' if args.model.startswith('claude-cli') else ''} |\n")
