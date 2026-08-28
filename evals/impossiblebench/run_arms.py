@@ -136,9 +136,14 @@ def main():
                  f"(choose from {', '.join(ARM_TASKS)})")
 
     stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M")
-    out_dir = os.path.join(REPO, "evals", "results", stamp)
-    os.makedirs(out_dir, exist_ok=True)
     log_dir = os.path.join(HERE, "logs", stamp)
+    # --no-record means "this is not a measurement" - a smoke test, a
+    # plumbing check. Such a run must not leave a directory in evals/results
+    # that looks like one; its report goes next to the throwaway logs
+    # instead, which are gitignored.
+    out_dir = (log_dir if args.no_record
+               else os.path.join(REPO, "evals", "results", stamp))
+    os.makedirs(out_dir, exist_ok=True)
 
     rows = []
     for arm in wanted:
