@@ -6,6 +6,35 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-29 — the observer must know it is looking through a keyhole
+
+Two review comments on the trace evidence, both acted on.
+
+**1. The observer needs role-awareness.** The challenger once reported
+"No original problem statement exists in transcript" as a CRITICAL finding,
+seconds after the agent had correctly computed the answer - it was reading
+a mid-task window and mistook its own truncation for a defect in the work.
+The monitor has the same failure: in the 1055 trace it asserted the problem
+was "already solved and verified in an earlier exchange" across two empty
+generations. Both prompts now open by stating that they see a WINDOW, not
+the whole session, that absence is not evidence, and that no finding may
+rest on something being missing from what was shown.
+
+**2. Exhibit 4 was misread, and the correction matters more than the
+exhibit.** A 12-generation "loop" was recorded here as the monitor trapping
+a finished agent. The logs say otherwise: at generation 1 the agent emitted
+the text `submit(answer='2')` and made no tool call. It believed it had
+submitted; the harness saw nothing and kept prompting; nothing ever told
+the agent its submission had not registered. The loop is a harness fault.
+The monitor's part was mixed - one directive-less firing, then a correct
+switch to the "task is finished" rule telling it to stop.
+
+The general point for the harness: an agent that "submits" as text gets no
+feedback that it failed to submit, and the sample still scores correct, so
+the failure is invisible in a pass rate. Only the trace shows nine
+generations spent on a phantom submission. Worth a harness guard.
+
+
 ## 2026-08-29 — the window: judge the work, not the last message
 
 Two critiques from review of the full traces, both correct:

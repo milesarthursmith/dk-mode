@@ -412,6 +412,14 @@ def _read_messages(path):
 PROMPT = """You do two jobs on one conversation between a coding agent and \
 its user. Answer with JSON only, no prose, no code fences.
 
+You see a WINDOW, not the whole conversation, and you may be seeing a
+partial or truncated view of work already in progress. Absence is not
+evidence: never raise a finding whose basis is that something is missing
+from what you were shown - no problem statement, no earlier step, no
+context. State only what the messages in front of you positively show. If
+you need something you cannot see, that is a reason to stay silent, not a
+reason to accuse.
+
 You are given a BRIEF (what this conversation is for and where it has got
 to) and a window of recent messages. The newest messages carry full text;
 older ones are digested to one line each, ending "...". A digest line is

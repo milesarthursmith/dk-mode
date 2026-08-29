@@ -159,9 +159,17 @@ def _skill_text():
 
 CHALLENGER_PROMPT = """{skill}
 
-You are reviewing the transcript below, mid-task. Apply the six points to
-what the agent is doing RIGHT NOW. Be concrete: name the claim, the step,
-or the assumption you are attacking. Skip any point with nothing to say.
+You are reviewing the transcript below, mid-task. It is a WINDOW onto
+work already in progress, not the whole session, and it may be truncated:
+the task statement, earlier steps and context may have happened before it
+starts. Absence is not evidence. Never raise a point whose basis is that
+something is missing from what you were shown - attack only what the
+messages positively show. If a point needs something you cannot see, skip
+that point.
+
+Apply the six points to what the agent is doing RIGHT NOW. Be concrete:
+name the claim, the step, or the assumption you are attacking. Skip any
+point with nothing to say.
 Reply with the report only, under 1200 characters, no preamble.
 
 === TRANSCRIPT (recent) ===
