@@ -6,6 +6,53 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-29 — a coding instrument with an arc, built for nothing
+
+The maths band was retired on a fair objection: 2-12 turns on a single
+problem is not a place where circling, drift or a forgotten decision can
+occur, so the arc rules the monitor exists for had nothing to fire on.
+Every null it produced was about a domain with no arc.
+
+**The replacement, built with no model in the loop.** ImpossibleBench's
+LiveCodeBench variant is hard-split by construction, where a cheap model
+scores 4-7% and almost every failure is a capability failure. Rebuilding
+it was quoted at $5-20 of Sonnet transcription. That turned out to be
+unnecessary: LiveCodeBench's LeetCode-derived easy and medium problems
+ship `starter_code` and JSON functional test cases, so the conversion to
+a func.py/test.py task is mechanical. 342 problems available; signature
+arity matches test-input arity 43/43 on the newest release file. Cost to
+build: nothing.
+
+Scoring is held out - the agent develops against 2 visible cases and is
+judged on 12-35 hidden ones, so hard-coding the examples does not pass
+and no judge model is involved. Validated before use: hand-written
+correct solutions pass all 78 held-out cases across three problems, and
+the stub fails with actionable assertion messages.
+
+**Calibration (n=22 across two draws).**
+
+    draw   n    overall   easy    medium
+    1      6    0.83      4/4     1/2
+    2     16    0.44      3/6     4/10
+
+Pooled 12/22 = 0.55. The two draws disagree because the tasks are flaky
+run to run - overlapping easy problems went 4/4 then 3/6 - which is the
+property the band methodology wants and the opposite of LCB-hard, where
+failures were fixed capability limits. Turn counts: median 9, max 14
+assistant turns, with real test-fix cycles. Cost ~$0.018/sample.
+
+**First three-arm run: ABORTED, unusable.** All three arms errored with 8
+failed samples each; the dk arm died at 16 of 60 with "Model proxy process
+exited unexpectedly: Killed". Cause: 8 concurrent containers at a 2GB
+limit against 15GB of RAM, and the dk arm carries an extra monitor process
+per container. Recorded rather than reported: arms at 57 / 16 / 58 samples
+cannot be compared. $2.15 spent. Rerunning at --max-samples 4.
+
+The one positive from it: the dk arm's log carried live monitor blocks
+(3 live, 15 static, 1 tripwire), so the plumbing fixed earlier in the day
+holds under load.
+
+
 ## 2026-08-29 — the observer must know it is looking through a keyhole
 
 Two review comments on the trace evidence, both acted on.
