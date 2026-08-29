@@ -6,6 +6,35 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-29 — the directive format: same null, and the band is exhausted
+
+First measured run of the second-person directive injection format
+(baseline + dk, one paired session, Haiku monitor, 46-task band, 3 epochs):
+
+    arm            mean  pass^3  pass@3  fire rate
+    baseline       0.70  23/46   41/46   -
+    dk(directive)  0.75  23/46   43/46   28%
+
+The mean gap does not survive pairing: 12-10, p=0.83. Against the
+old-format dk arm it is 11-12, p=1.00 - the format change moved nothing
+measurable. The mandatory alert did raise the fire rate (17% → 28%).
+
+Two secondary findings worth keeping:
+
+- **Session drift is real.** This session's baseline came in at 0.70 where
+  the previous session's was 0.67 - about the size of most "effects"
+  observed all week. Only same-session pairing means anything on this
+  instrument, and the earlier unpaired dk(haiku) 0.73 "lead" is now fully
+  deflated: it sits inside session drift.
+- **The instrument is exhausted.** Every knob has now produced the same
+  null on the maths band: payload content (7 arms), monitor model
+  (Haiku vs gpt-oss-120b), injection format (rule-card vs directive), and
+  selection vs schedule. The conclusion is consistent and boring:
+  on short single-problem tasks, mid-task injection neither helps nor
+  hurts by more than session noise. Further runs here spend money to
+  re-measure noise. The open question lives entirely on long-horizon
+  tasks (`evals/hooked`).
+
 ## 2026-08-29 — the monitor ablation: a smarter monitor changes nothing
 
 The hypothesis that the maths-band nulls trace to a weak monitor (Haiku)
