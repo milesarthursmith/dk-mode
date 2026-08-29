@@ -151,19 +151,24 @@ live use the delivered text is in the window, so expect lower.
 
 ## Known gaps
 
-- **The harness reimplements dk-mode's injection; it does not run
-  dk-mode's hooks.** `EVALS.md` rule 1 asks for the real channel. The
-  route is `inspect_swe`'s `claude_code()` solver: the real Claude Code
-  binary in a sandbox with its API calls bridged back to any inspect
-  model, so the shipped plugin's UserPromptSubmit/PostToolUse/Stop hooks
-  fire for real while a cheap model drives. All three hooks are verified
-  to fire under headless `claude -p`.
+- **This harness reimplements dk-mode's injection; the real hooks run in
+  `evals/hooked/`.** `EVALS.md` rule 1 asks for the real channel, and
+  `evals/hooked/arms_hooked.py` provides it: `inspect_swe`'s
+  `claude_code()` solver runs the real Claude Code binary in a sandbox
+  with its API calls bridged back to any inspect model, so the shipped
+  plugin's UserPromptSubmit/PostToolUse/Stop hooks fire for real while a
+  cheap model drives. Verified firing in-sandbox (docs/log.md,
+  2026-08-28). The remaining gap: no arm comparison has been run on that
+  harness yet.
 - **No pairwise judge yet.** Where a behavioural count cannot settle a
   question, the intended design is a blind, position-swapped pairwise
   judge from a **different model family than the agent** — never the same
   family grading itself.
-- **The decisive comparison has not been run.** With the monitor firing on
-  92% of turns, `dk` was nearly identical to a fixed schedule by
-  construction. The claim dk-mode actually makes is that *selection* beats
-  *presence*, so the pair that tests it is `dk` vs `challenge`, head to
-  head, now that the fire rate is halved.
+- **`dk` vs `challenge` has been run on maths, not yet on long-horizon
+  coding.** At the corrected fire rate, on a 46-task MATH-500 band
+  (3 epochs, paired), no injection policy — selected, scheduled,
+  goal-restating, or adversarial — separates from baseline significantly,
+  and an 11-character payload performs within noise of the richest ones
+  (docs/log.md, 2026-08-29). On that instrument, *selection* does not
+  beat *presence*; the long-horizon coding version of the question waits
+  on the `evals/hooked/` harness.

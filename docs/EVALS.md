@@ -1,10 +1,10 @@
 # Eval design: measure dk-mode on tasks, then climb
 
 This replaces the harness removed on 2026-08-27, and it replaces an earlier
-draft of this document that proposed hand-labelled golden sets. The owner
-rejected that, and the objection is structurally sound: the labels would come
-from the same person whose corrections the monitor mines, so the eval would
-grade the system with its own food. No hand labels anywhere in this design.
+draft of this document that proposed hand-labelled golden sets. That draft
+was rejected for a structural reason: the labels would come from the same
+person whose corrections the monitor mines, so the eval would grade the
+system with its own food. No hand labels anywhere in this design.
 Every score comes from task outcomes a script can check.
 
 The goal is hill climbing: change one thing, re-run the same tasks with the
@@ -98,8 +98,10 @@ challenge skill already exists, so a scheduled challenge needs no critic, no
 prompt, and no selection - it cannot fail by picking the wrong rule or
 picking nothing. That makes it both a feature candidate and the honest
 control demanded by rule 3. A `try-harder-N` payload variant is the same arm
-with different fixed text; add it once `challenge-N` has a number, not
-before - each extra arm multiplies cost.
+with different fixed text. The payload ablation has since been run on the
+MATH-500 band (docs/log.md, 2026-08-29): no payload separates from baseline
+significantly, and "Try harder." performs within noise of the richest
+payloads.
 
 One benchmark note: inside a benchmark task there is usually one user turn
 and many tool calls, so the injection point that matters is the per-tool-call
@@ -108,7 +110,8 @@ calls. Start with N=10 and treat N as a knob.
 
 **If `challenge-N` matches or beats `dk`**, the selection layer is not
 earning its per-turn model call, and the repo should say so and simplify.
-That outcome is explicitly on the table.
+That outcome is explicitly on the table — and on the maths band it is what
+was observed (docs/log.md, 2026-08-28 and 2026-08-29).
 
 ### 2.5 What gets logged per run
 
@@ -180,7 +183,7 @@ benchmark, arm, model, score, spread, cost); raw per-run logs archived under
 re-derived.
 
 Goodhart guard: the frozen subsets are the climb surface; the full
-benchmarks, run rarely, are the check that we did not overfit the subsets.
+benchmarks, run rarely, are the check that the subsets were not overfit.
 
 ---
 
@@ -198,8 +201,13 @@ benchmarks, run rarely, are the check that we did not overfit the subsets.
 1. Rebuild the ImpossibleBench harness (the deleted `dk_steer.py`, fixed):
    arms as above, `dk_calls`/`dk_fired` in metadata, LiveCodeBench variant,
    Haiku. Reproduce the published baseline before anything else.
+   **Done** — `evals/impossiblebench/`, published 0.0% baseline reproduced.
 2. Run the first four-arm comparison on the frozen subset. That number is
-   the starting point of the climb.
+   the starting point of the climb. **Done** — see `evals/results.md` and
+   docs/log.md (2026-08-28 through 2026-08-29, including the MATH-500 band
+   comparisons and the seven-payload ablation). A real-hooks harness now
+   also exists (`evals/hooked/`), satisfying rule 1's real channel; no arm
+   comparison has been run on it yet.
 3. Behavioral suite + naive fallback runner.
 4. SWE-bench Lite subset on Modal.
 5. Milestone re-check on Sonnet 5.

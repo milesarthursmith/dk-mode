@@ -23,8 +23,8 @@ Seven arms in one paired session on the 46-problem band, 3 fresh epochs,
 Paired against baseline, nothing is significant: challenge 16/12
 (p=0.57), try-harder 16/14 (p=0.86), the rest worse. The ranking of
 payloads is flat: "Try harder." - eleven characters per firing - performs
-within noise of the 600-char self-check text, the owner's six-point
-challenge protocol, and an out-of-band adversarial reviewer that costs a
+within noise of the 600-char self-check text, the six-point
+challenge-skill protocol, and an out-of-band adversarial reviewer that costs a
 model call per firing and injected 120x the text. If interruption helps
 at all here, its content does not matter. And even interruption's help
 is one-in-two to be luck at this n.
@@ -37,9 +37,8 @@ number of the day, but it ran without an in-session baseline, so it is a
 lead to confirm, not a result.
 
 The monitor-model swap (gpt-oss-120b) died on HTTP 403: the OpenRouter
-KEY has a $50 total-spend limit, now exhausted - distinct from the
-account balance, which still holds $18. Roughly $50 spent across the
-whole day, most of it on the maths programme's ~1,700 trials.
+key carries a per-key total-spend limit, now exhausted - distinct from
+the account balance, which still held credit.
 
 Where this leaves the question: on short maths tasks, no injection
 policy - selected, scheduled, generic, goal-restating, or adversarial -
@@ -59,8 +58,7 @@ a Docker sandbox, its API calls bridged to Gemini Flash Lite, with dk-mode
 installed as a real plugin - and the transcripts contain the
 <self-steering> blocks its UserPromptSubmit hook injected. Two samples,
 one scored correct, hooks firing as processes on real sessions. EVALS.md
-rule 1 - the real channel, not a reimplementation - is now met, for about
-ten cents.
+rule 1 - the real channel, not a reimplementation - is now met.
 
 Two blockers found and cleared on the way, both recorded in the module:
 Claude Code validates the model id it is TOLD and rejects non-Anthropic
@@ -97,7 +95,7 @@ Also worth noting: challenge finished in fewer generations than
 baseline (608 vs 774) - interruption does not slow the agent here.
 
 The payload screen (try-harder / goal / goal+rules / challenge), the
-skill arms (the owner's challenge protocol, in-context vs out-of-band)
+skill arms (the six-point challenge protocol, in-context vs out-of-band)
 and a monitor swap (Haiku -> gpt-oss-120b, a real reasoner at 1/25th
 the price) are queued on the same band. If try-harder matches
 challenge, content is irrelevant and the whole effect is interruption.
@@ -242,7 +240,7 @@ scheduled challenge, head to head, at the corrected fire rate.
 ## 2026-08-27 — the eval harness rebuilt, four arms, plumbing verified
 
 `docs/EVALS.md` designs the replacement for the harness removed earlier
-today. Two decisions from the owner shaped it. First: no hand-labelled
+today. Two decisions shaped it. First: no hand-labelled
 golden sets — the labels would come from the same person whose corrections
 the monitor mines, so the eval would grade the system with its own food.
 Every score is a task outcome a script can check. Second: the agent under
@@ -275,7 +273,7 @@ subset, `conflicting` and `original` splits.
 
 ## 2026-08-27 — periodic challenge (NOT BUILT — written down only)
 
-The owner's point, and it is simpler than what was being designed: dk-mode
+The idea is simpler than what was being designed: dk-mode
 already has an injection channel, and the `/challenge` skill already works.
 So a periodic challenge needs no new critic, no new prompt, and no second
 model call. Every N turns the hook injects text that invokes the existing
@@ -372,7 +370,7 @@ they can be checked, not because they are precise for any one agent.
 
 ## 2026-08-26 — the phrase pass deleted, and three wiring bugs it hid
 
-Miles: "The regex test is not worth it." Correct, and it was worse than
+The regex phrase test was not worth keeping — it was worse than
 useless. Checking why exposed three bugs of the same class — a component that
 was never reached — none of which 89 green tests could see.
 
@@ -553,19 +551,19 @@ relevance model cannot invent text.
 
 Stated plainly because the README does not.
 
-1. **Selectivity is asserted, not measured.** The claim "usually no rule
-   applies" is the assumption the whole design rests on. It has never been
-   measured against a real model on real conversations.
-2. **Semantic mining has never run against a real model on real history.**
-   Only against local stand-in servers.
-3. **The full hook loop has never been observed end to end.** Partly closed
-   on 2026-08-26: both hooks are now registered in work-backup's committed
-   `.claude/settings.json`, and running each hook's exact command string by
-   hand produces the correct output and exit code. The injection route was
-   also verified indirectly — `additionalContext` appears in a real
-   transcript, which proves the harness injects text that way. What is still
-   unobserved is the harness itself calling the hook mid-conversation and the
-   model reading the result.
+1. **Selectivity has now been measured, and the original claim was false as
+   shipped.** The 2026-08-28 replay measurement put the shipped prompt at a
+   92% fire rate; the reworked prompt measures 46% in the same replay
+   (which overstates live rates). Whether that is selective enough remains
+   an open question, not a settled one.
+2. **Semantic mining has run against real history** (2026-08-27: three real
+   conversations, 13 items found, 10 real). Coverage beyond that first run
+   is still thin.
+3. **The full hook loop has been observed end to end.** Closed in stages:
+   on 2026-08-26 each hook's exact command string was verified by hand, and
+   on 2026-08-28 the shipped plugin ran under a real Claude Code binary in
+   `evals/hooked/` with the hooks firing in-session and the injected
+   `<self-steering>` blocks present in the transcripts.
 4. **Sonnet via OpenRouter was never compared** against the default models.
 5. **Consolidation stalled at 30 of 117 entries** on an early, noisy log. The
    log needs to be cleared and re-mined with the current filters.
