@@ -652,13 +652,37 @@ Stated plainly because the README does not.
    under a real Claude Code binary in `evals/hooked/` with the hooks firing
    in-session and injected `<self-steering>` blocks present in the
    transcripts. Trace classification on 2026-08-29 showed those blocks were
-   the deterministic layers only (recall's static note, one tripwire
-   warning): the sandbox carried no monitor credentials, so `dk_watch`'s
-   model-based selection never ran under the real binary in that smoke
-   test. Fixed the same day (compose now passes `DK_*` through). The maths
-   and coding harnesses are unaffected - there `dk_watch` runs in the eval
-   process on the host, and its firings and payloads are recorded per
-   sample (`dk_fired`, `dk_payload_log`).
+   the deterministic layers only (recall's static note, the tripwire): the
+   model-based selection has never run under the real binary. An audit on
+   2026-08-29 counted the producers across all seven hooked logs - 212
+   static notes, 13 tripwire warnings, **zero** live monitor blocks - and
+   found three independent causes, each sufficient on its own:
+
+   1. **No credentials in the container.** The compose file had no
+      `environment:` block until 2026-08-29, so `dk_watch` took its
+      no-key exit. Fixed.
+   2. **No egress from the container.** `dk_watch` calls a model from
+      inside the sandbox. Where the host reaches the internet through a
+      local proxy, the container can see neither the proxy (bound to host
+      loopback) nor a valid TLS chain; `curl` failed with exit 60.
+      Invisible in transcripts, because the other two hooks need no
+      network. Fixed via `DK_NET_MODE`/`DK_CA_BUNDLE`.
+   3. **One prompt per sample.** `dk_watch` runs on Stop and writes its
+      verdict for the NEXT `UserPromptSubmit`; recall is the only reader.
+      A headless single-prompt session has no next prompt, so the monitor
+      cannot deliver however well it is configured. `attempts` raised
+      from 1 to 6.
+
+   None of the three is yet demonstrated fixed: no hooked run has produced
+   a live monitor block. The maths and coding harnesses are unaffected -
+   there `dk_watch` runs in the eval process on the host, with 369/517/494
+   monitor calls recorded and every payload logged per sample
+   (`dk_fired`, `dk_payload_log`).
+
+   **The general lesson, which is about dk-mode and not about the eval:**
+   in any single-turn headless session (`claude -p`), only the static note
+   and the tripwire can ever speak. The model-based monitor needs a
+   multi-turn conversation by construction.
 4. **Sonnet via OpenRouter was never compared** against the default models.
 5. **Consolidation stalled at 30 of 117 entries** on an early, noisy log. The
    log needs to be cleared and re-mined with the current filters.

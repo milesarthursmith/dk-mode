@@ -4,15 +4,35 @@ services:
     build: .
     command: "tail -f /dev/null"
     init: true
-    # The monitor's own model call needs egress; the tripwire and recall
-    # hooks do not. network_mode: none would silence dk_watch entirely.
-    # The DK_* variables reach the hook processes through the container
-    # env; without them dk_watch has no key and the dk arm degrades to
-    # the deterministic hooks only.
+    # Two things must be true for the dk arm to be a real dk arm, and
+    # BOTH failed silently on the first attempt - the hooks fired, the
+    # static note was injected, and the model-based monitor never ran, so
+    # the arm was quietly "deterministic hooks only". Check the logs for
+    # live monitor blocks before believing any dk result:
+    #
+    # 1. CREDENTIALS. The DK_* variables have to reach the hook
+    #    processes. Without a key dk_watch exits quietly.
+    # 2. EGRESS. dk_watch calls a model from INSIDE the container. The
+    #    tripwire and recall hooks do not, so a network failure is
+    #    invisible in the transcript - it just looks like a quiet monitor.
+    #    Where the host reaches the internet through a local proxy (the
+    #    usual case in a CI or agent sandbox), the container cannot see a
+    #    proxy bound to host loopback and cannot verify a re-terminated
+    #    TLS chain. Set DK_NET_MODE=host and DK_CA_BUNDLE to the proxy's
+    #    CA file. Direct-internet hosts need neither and keep bridge
+    #    networking, which is the default here.
+    network_mode: ${DK_NET_MODE:-bridge}
+    volumes:
+      - ${DK_CA_BUNDLE:-/etc/hostname}:/opt/dk-ca.crt:ro
     environment:
       DK_API_KEY: ${DK_API_KEY:-}
       DK_BACKEND: ${DK_BACKEND:-}
       DK_API_URL: ${DK_API_URL:-}
       DK_WATCH_MODELS: ${DK_WATCH_MODELS:-}
+      HTTPS_PROXY: ${DK_SANDBOX_PROXY:-}
+      HTTP_PROXY: ${DK_SANDBOX_PROXY:-}
+      SSL_CERT_FILE: ${DK_SANDBOX_CA:-}
+      CURL_CA_BUNDLE: ${DK_SANDBOX_CA:-}
+      REQUESTS_CA_BUNDLE: ${DK_SANDBOX_CA:-}
     stop_grace_period: 1s
     mem_limit: 2gb

@@ -144,7 +144,15 @@ def _task(hooks: bool, split: str, limit: int, challenge_every: int = 0):
         # would otherwise be duplicating, so nothing is added here: the
         # arms differ only in what dk-mode or the schedule says.
         cwd="/work",
-        attempts=1,
+        # MUST be > 1 for the dk arm to mean anything. dk_watch runs on
+        # Stop and writes its verdict for the NEXT UserPromptSubmit; recall
+        # is the only reader of that file. With one prompt per sample there
+        # is no next prompt, so the model-based monitor can never deliver -
+        # the arm silently degrades to the static note plus the tripwire,
+        # which is exactly what the first three flights measured. Each
+        # attempt is a fresh prompt, so N attempts give N-1 chances for a
+        # live selection to land.
+        attempts=6,
         # The bridge serves whatever model the eval was launched with, but
         # Claude Code validates the model ID it is TOLD (ANTHROPIC_MODEL)
         # and rejects non-Anthropic names outright with

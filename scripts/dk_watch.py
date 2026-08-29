@@ -715,6 +715,13 @@ def main():
     key = read_key()
     # Neither a local server nor the `claude` CLI needs a key.
     if not key and BACKEND not in ("openai", "cli"):
+        # Leave a trace. This was the one failure path in the file that
+        # wrote nothing at all, so a watcher that never ran looked exactly
+        # like a watcher with nothing to say - it hid a dead monitor
+        # through a whole eval run before anyone noticed the injections
+        # were all coming from the deterministic hooks.
+        mark(False, "no key for backend %s" % BACKEND)
+        log("no key: DK_API_KEY/ANTHROPIC_API_KEY unset, backend=%s" % BACKEND)
         return 0                       # hosted backend with no key: no-op
     try:
         os.mkdir(LOCK)                 # one watcher at a time; no waiting
