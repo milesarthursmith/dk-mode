@@ -6,6 +6,40 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-29 — the injection now speaks to the agent, not about it
+
+Trace review of the dk arm (2026-08-29_0231 run) showed the injection
+format failing in a specific way. In the sample that fired most (12
+generations, 7 firings), every injection led with a third-person diagnosis
+("Agent is claiming...") followed by the same generic rule reminder, seven
+turns running — while the monitor's own alert had already named the exact
+missing step (the k=1 continuity check) and never once told the agent to do
+it. The one clean save in the run (`number_theory/1055`: agent falsely
+claimed it could not proceed, then recovered and submitted the right
+answer) came from the most situation-specific alert in the log.
+
+Change shipped to `dk_watch.py`:
+
+- The alert is now mandatory whenever a rule is selected, addressed
+  directly to the agent as "you", and must contain two parts: what you are
+  doing wrong now, and the one concrete next action from this conversation.
+  Cap raised 200 → 300 chars to fit the directive.
+- `render()` leads with that directive. The rule is demoted to one
+  parenthesized grounding line (heading + reminder + what earned it)
+  instead of the old what-it-looks-like episode card.
+
+Verified by free CLI replay over the recorded dk traces: the new prompt
+produces alerts like "You presented these formulas as the final answer
+without verifying them... Test these formulas" — second person, concrete.
+Side effect observed: the monitor sometimes writes the directive without
+selecting a rule id, which now injects a pure directive with no rule card;
+`tune_selectivity.py` was updated to count those as firings.
+
+**Unmeasured.** No arm has run under this format. The monitor ablation
+in flight at the time of the change imported the old prompt at launch, so
+its result stays comparable with earlier dk arms; the new format is the
+next thing to test.
+
 ## 2026-08-29 — the payload ablation: nothing beats "Try harder."
 
 Seven arms in one paired session on the 46-problem band, 3 fresh epochs,

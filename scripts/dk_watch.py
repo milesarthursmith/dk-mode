@@ -386,9 +386,14 @@ agent did that exact thing again afterwards. If the evidence is anything \
 other than the last assistant message itself, return an empty active list. \
 The correct answer is usually an empty list. At most {max_active}.
 
-Optionally add one "alert": a single blunt present-tense sentence naming \
-what the agent is about to do wrong. Only if it is specific to THIS \
-conversation.
+When you select any rule you MUST also write an "alert"; without a \
+selection it is optional. The alert speaks directly TO the agent as "you", \
+like a human interrupting over its shoulder, and has two parts in one or \
+two sentences: what you are doing wrong right now, and the one concrete \
+action to take next - named from THIS conversation, not restated from the \
+rule. "You are resubmitting the same formula without running the k=1 check \
+you listed as open - run that check now, then submit." Never describe the \
+agent in the third person.
 
 JOB 2 - which messages steered the agent. People steer by redirecting, not \
 by announcing a correction, so read for meaning rather than phrasing.
@@ -652,7 +657,7 @@ def parse_selection(text, rules):
     valid = {r["id"] for r in rules}
     active = [i for i in data.get("active", []) if isinstance(i, int) and i in valid]
     alert = data.get("alert")
-    if not isinstance(alert, str) or not alert.strip() or len(alert) > 200:
+    if not isinstance(alert, str) or not alert.strip() or len(alert) > 300:
         alert = None
     steering = data.get("steering")
     if not isinstance(steering, list):
@@ -663,31 +668,28 @@ def parse_selection(text, rules):
 
 
 def render(active_ids, alert, rules):
-    """Render the live items as short episodes, not one-liners.
+    """Render the injection as a direct address, not a rule recitation.
 
-    When the note was injected on EVERY prompt it had to be tiny or it
-    became noise. It is now injected only when something is actually live -
-    usually nothing at all - so the budget is better spent making the few
-    items that do appear carry their evidence: what it looks like, what to
-    do, and the words that earned the rule. A bare imperative is easy to
-    skim past; the episode behind it is not."""
+    The alert leads because it is the only situation-specific sentence:
+    the monitor writes it TO the agent ("you are X - do Y next"), and a
+    concrete directive is what changes behaviour. The rule that fired
+    follows as compact grounding - the standing principle and the words
+    that earned it - not as the message itself. Trace review showed the
+    old rule-first format diagnosing the same failure seven turns running
+    while never naming the specific fix the monitor itself had spotted."""
     by_id = {r["id"]: r for r in rules}
     parts = []
     if alert:
-        parts.append(f"! {alert.strip()}")
+        parts.append(alert.strip())
     for i in active_ids:
         r = by_id[i]
-        block = [f"* {r['heading']}"]
-        if r.get("looks_like"):
-            block.append(f"    what it looks like: {r['looks_like'][:240]}")
-        block.append(f"    so: {r['reminder']}")
+        block = [f"(standing rule: {r['heading']} - {r['reminder']}"]
         if r.get("evidence"):
-            block.append(f"    earned by: {r['evidence'][:240]}")
-        parts.append("\n".join(block))
+            block.append(f" earned by: {r['evidence'][:240]}")
+        parts.append("\n".join(block) + ")")
     if not parts:
         return ""      # nothing live: inject nothing at all
-    return ("<self-steering>\nRelevant to what you are doing right now:\n"
-            + "\n".join(parts) + "\n</self-steering>\n")
+    return ("<self-steering>\n" + "\n".join(parts) + "\n</self-steering>\n")
 
 
 def atomic_write(path, text):

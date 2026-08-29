@@ -555,11 +555,11 @@ start_watch_mock '{"active":[1],"alert":null}'
 run_watch "$FIX/transcript_doneclaim.jsonl"; stop_mock
 # id 1 = first approved item in the fixture = "Claiming done without verifying"
 if grep -q "never say a check passed unless you ran it this turn" "$ACTIVEF" \
-   && grep -q "Relevant to what you are doing right now" "$ACTIVEF"; then ok; else bad "active: $(cat "$ACTIVEF" 2>/dev/null)"; fi
+   && grep -q "standing rule:" "$ACTIVEF"; then ok; else bad "active: $(cat "$ACTIVEF" 2>/dev/null)"; fi
 
-t "53b. a live item is rendered as an episode: what it looks like, what to do, what earned it"
+t "53b. a live item carries its grounding: the standing rule and what earned it"
 a="$ACTIVEF"
-if grep -q "what it looks like:" "$a" && grep -q "so: " "$a" && grep -q "earned by:" "$a"; then ok; else bad "$(cat "$a")"; fi
+if grep -q "standing rule:" "$a" && grep -q "earned by:" "$a"; then ok; else bad "$(cat "$a")"; fi
 
 t "54. recall prefers the live selection over the static note"
 out=$(run_recall)

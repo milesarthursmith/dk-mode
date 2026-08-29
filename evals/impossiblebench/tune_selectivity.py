@@ -151,7 +151,7 @@ def replay_chain(sample_id, messages, points, variant):
         heads = [by_id[i]["heading"] for i in active]
         delivered.update(heads)
         rows.append({"point": pt, "active": heads,
-                     "alert": (alert or "")[:200]})
+                     "alert": (alert or "")[:300]})
     return {"sample": sample_id, "variant": variant, "rows": rows}
 
 
@@ -203,7 +203,7 @@ def main():
         for fut in cf.as_completed(futs):
             r = fut.result()
             ok = [x for x in r["rows"] if "active" in x]
-            fired = sum(1 for x in ok if x["active"])
+            fired = sum(1 for x in ok if x["active"] or x.get("alert"))
             print(f"  done {r['sample']:<14} {r['variant']:<11} "
                   f"points={len(r['rows'])} fired={fired}", flush=True)
             results.append(r)
@@ -215,7 +215,7 @@ def main():
         rows = [row for r in results if r["variant"] == v for row in r["rows"]]
         ok = [x for x in rows if "active" in x]
         errs = len(rows) - len(ok)
-        fired = sum(1 for x in ok if x["active"])
+        fired = sum(1 for x in ok if x["active"] or x.get("alert"))
         sels = Counter(h for x in ok for h in x["active"])
         rate = fired / len(ok) if ok else float("nan")
         top = ", ".join(f"{h.split()[0]}..x{n}" for h, n in sels.most_common(3))
