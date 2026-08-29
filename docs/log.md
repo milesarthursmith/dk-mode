@@ -646,11 +646,19 @@ Stated plainly because the README does not.
 2. **Semantic mining has run against real history** (2026-08-27: three real
    conversations, 13 items found, 10 real). Coverage beyond that first run
    is still thin.
-3. **The full hook loop has been observed end to end.** Closed in stages:
-   on 2026-08-26 each hook's exact command string was verified by hand, and
-   on 2026-08-28 the shipped plugin ran under a real Claude Code binary in
-   `evals/hooked/` with the hooks firing in-session and the injected
-   `<self-steering>` blocks present in the transcripts.
+3. **The full hook loop has been observed end to end - with one
+   correction.** Closed in stages: on 2026-08-26 each hook's exact command
+   string was verified by hand, and on 2026-08-28 the shipped plugin ran
+   under a real Claude Code binary in `evals/hooked/` with the hooks firing
+   in-session and injected `<self-steering>` blocks present in the
+   transcripts. Trace classification on 2026-08-29 showed those blocks were
+   the deterministic layers only (recall's static note, one tripwire
+   warning): the sandbox carried no monitor credentials, so `dk_watch`'s
+   model-based selection never ran under the real binary in that smoke
+   test. Fixed the same day (compose now passes `DK_*` through). The maths
+   and coding harnesses are unaffected - there `dk_watch` runs in the eval
+   process on the host, and its firings and payloads are recorded per
+   sample (`dk_fired`, `dk_payload_log`).
 4. **Sonnet via OpenRouter was never compared** against the default models.
 5. **Consolidation stalled at 30 of 117 entries** on an early, noisy log. The
    log needs to be cleared and re-mined with the current filters.
