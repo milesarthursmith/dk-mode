@@ -6,5 +6,13 @@ services:
     init: true
     # The monitor's own model call needs egress; the tripwire and recall
     # hooks do not. network_mode: none would silence dk_watch entirely.
+    # The DK_* variables reach the hook processes through the container
+    # env; without them dk_watch has no key and the dk arm degrades to
+    # the deterministic hooks only.
+    environment:
+      DK_API_KEY: ${DK_API_KEY:-}
+      DK_BACKEND: ${DK_BACKEND:-}
+      DK_API_URL: ${DK_API_URL:-}
+      DK_WATCH_MODELS: ${DK_WATCH_MODELS:-}
     stop_grace_period: 1s
     mem_limit: 2gb
