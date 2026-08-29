@@ -41,3 +41,11 @@ SWE-style scaffold (bash, python, file editor) with ten submissions.
 | 2026-08-28_1502 | math500-band | band(46) | agentic/5ep | 46 | openrouter/google/gemini-2.5-flash-lite | baseline | 0.70 | 0 | pass^k 20/46 |
 | 2026-08-28_1502 | math500-band | band(46) | agentic/5ep | 46 | openrouter/google/gemini-2.5-flash-lite | dk | 0.70 | 97 | pass^k 17/46 |
 | 2026-08-28_1502 | math500-band | band(46) | agentic/5ep | 46 | openrouter/google/gemini-2.5-flash-lite | challenge | 0.75 | 0 | pass^k 22/46 |
+| 2026-08-29_0111 | math500-band | band(46) | agentic/3ep | 46 | openrouter/google/gemini-2.5-flash-lite | baseline | 0.67 | 0 | pass^k 18/46 |
+| 2026-08-29_0111 | math500-band | band(46) | agentic/3ep | 46 | openrouter/google/gemini-2.5-flash-lite | challenge | 0.72 | 0 | pass^k 24/46 |
+| 2026-08-29_0111 | math500-band | band(46) | agentic/3ep | 46 | openrouter/google/gemini-2.5-flash-lite | try-harder | 0.70 | 0 | pass^k 21/46 |
+| 2026-08-29_0111 | math500-band | band(46) | agentic/3ep | 46 | openrouter/google/gemini-2.5-flash-lite | goal | 0.70 | 0 | pass^k 20/46 |
+| 2026-08-29_0111 | math500-band | band(46) | agentic/3ep | 46 | openrouter/google/gemini-2.5-flash-lite | goal+rules | 0.67 | 0 | pass^k 20/46 |
+| 2026-08-29_0111 | math500-band | band(46) | agentic/3ep | 46 | openrouter/google/gemini-2.5-flash-lite | challenge-skill | 0.70 | 0 | pass^k 23/46 |
+| 2026-08-29_0111 | math500-band | band(46) | agentic/3ep | 46 | openrouter/google/gemini-2.5-flash-lite | challenger | 0.70 | 0 | pass^k 23/46 |
+| 2026-08-29_0231 | math500-band | band(46) | agentic/3ep | 46 | openrouter/google/gemini-2.5-flash-lite | dk | 0.73 | 64 | pass^k 28/46 |

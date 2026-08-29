@@ -154,6 +154,9 @@ def main():
     print(f"\n{'arm':<11} {'mean':>6} {'pass^k':>7} {'pass@k':>7} "
           f"{'gens':>5} {'dk_fired':>8} {'chal':>5} {'inj_chars':>9}")
     for r in rows:
+        if r["mean_pass"] is None:
+            print(f"{r['arm']:<11} (no scored trials - see logs)")
+            continue
         print(f"{r['arm']:<11} {r['mean_pass']:>6.2f} "
               f"{r['pass_all_k']:>4}/{r['n_tasks']:<3}"
               f"{r['pass_any_k']:>4}/{r['n_tasks']:<3} "

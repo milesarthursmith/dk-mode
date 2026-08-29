@@ -1,0 +1,1725 @@
+{
+ "date": "2026-08-29_0111",
+ "model": "openrouter/google/gemini-2.5-flash-lite",
+ "epochs": 3,
+ "band_from": "2026-08-28_1416",
+ "n_band": 46,
+ "challenge_n": 3,
+ "rows": [
+  {
+   "arm": "baseline",
+   "n_tasks": 46,
+   "trials": 138,
+   "mean_pass": 0.6739130434782609,
+   "pass_all_k": 18,
+   "pass_any_k": 40,
+   "passes": {
+    "test/algebra/1078.json": [
+     0,
+     1,
+     0
+    ],
+    "test/algebra/1199.json": [
+     1,
+     1,
+     0
+    ],
+    "test/algebra/1339.json": [
+     1,
+     1,
+     0
+    ],
+    "test/algebra/1343.json": [
+     0,
+     0,
+     0
+    ],
+    "test/algebra/2043.json": [
+     0,
+     0,
+     0
+    ],
+    "test/algebra/2253.json": [
+     0,
+     0,
+     0
+    ],
+    "test/algebra/2626.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/297.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/907.json": [
+     1,
+     1,
+     1
+    ],
+    "test/counting_and_probability/238.json": [
+     1,
+     1,
+     0
+    ],
+    "test/counting_and_probability/430.json": [
+     1,
+     1,
+     1
+    ],
+    "test/counting_and_probability/731.json": [
+     1,
+     1,
+     0
+    ],
+    "test/counting_and_probability/894.json": [
+     1,
+     1,
+     1
+    ],
+    "test/geometry/686.json": [
+     1,
+     0,
+     1
+    ],
+    "test/geometry/817.json": [
+     1,
+     0,
+     0
+    ],
+    "test/geometry/965.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1197.json": [
+     1,
+     0,
+     1
+    ],
+    "test/intermediate_algebra/1279.json": [
+     0,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1508.json": [
+     0,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1510.json": [
+     1,
+     0,
+     0
+    ],
+    "test/intermediate_algebra/345.json": [
+     1,
+     0,
+     1
+    ],
+    "test/intermediate_algebra/362.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/955.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/960.json": [
+     1,
+     0,
+     1
+    ],
+    "test/intermediate_algebra/964.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/1002.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/1055.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/1065.json": [
+     0,
+     1,
+     0
+    ],
+    "test/number_theory/109.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/1287.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/417.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/427.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/516.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/631.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/753.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/838.json": [
+     0,
+     1,
+     1
+    ],
+    "test/prealgebra/1128.json": [
+     0,
+     0,
+     1
+    ],
+    "test/prealgebra/1251.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1423.json": [
+     0,
+     0,
+     0
+    ],
+    "test/prealgebra/1961.json": [
+     1,
+     1,
+     0
+    ],
+    "test/prealgebra/2057.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/465.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/914.json": [
+     0,
+     1,
+     1
+    ],
+    "test/precalculus/1146.json": [
+     1,
+     0,
+     1
+    ],
+    "test/precalculus/398.json": [
+     0,
+     0,
+     0
+    ],
+    "test/precalculus/902.json": [
+     0,
+     0,
+     0
+    ]
+   },
+   "gen_count": 469,
+   "dk_calls": 0,
+   "dk_fired": 0,
+   "challenge_fired": 0,
+   "injected_chars": 0
+  },
+  {
+   "arm": "challenge",
+   "n_tasks": 46,
+   "trials": 138,
+   "mean_pass": 0.7246376811594203,
+   "pass_all_k": 24,
+   "pass_any_k": 41,
+   "passes": {
+    "test/algebra/1078.json": [
+     0,
+     0,
+     0
+    ],
+    "test/algebra/1199.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/1339.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/1343.json": [
+     0,
+     1,
+     1
+    ],
+    "test/algebra/2043.json": [
+     0,
+     0,
+     0
+    ],
+    "test/algebra/2253.json": [
+     0,
+     0,
+     0
+    ],
+    "test/algebra/2626.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/297.json": [
+     1,
+     0,
+     1
+    ],
+    "test/algebra/907.json": [
+     1,
+     1,
+     1
+    ],
+    "test/counting_and_probability/238.json": [
+     1,
+     1,
+     1
+    ],
+    "test/counting_and_probability/430.json": [
+     0,
+     1,
+     1
+    ],
+    "test/counting_and_probability/731.json": [
+     1,
+     1,
+     0
+    ],
+    "test/counting_and_probability/894.json": [
+     1,
+     1,
+     1
+    ],
+    "test/geometry/686.json": [
+     1,
+     0,
+     0
+    ],
+    "test/geometry/817.json": [
+     0,
+     0,
+     0
+    ],
+    "test/geometry/965.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1197.json": [
+     1,
+     0,
+     1
+    ],
+    "test/intermediate_algebra/1279.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1508.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1510.json": [
+     0,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/345.json": [
+     1,
+     1,
+     0
+    ],
+    "test/intermediate_algebra/362.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/955.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/960.json": [
+     0,
+     1,
+     0
+    ],
+    "test/intermediate_algebra/964.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/1002.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/1055.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/1065.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/109.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/1287.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/417.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/427.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/516.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/631.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/753.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/838.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1128.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1251.json": [
+     0,
+     1,
+     1
+    ],
+    "test/prealgebra/1423.json": [
+     1,
+     0,
+     0
+    ],
+    "test/prealgebra/1961.json": [
+     0,
+     1,
+     0
+    ],
+    "test/prealgebra/2057.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/465.json": [
+     1,
+     0,
+     1
+    ],
+    "test/prealgebra/914.json": [
+     0,
+     1,
+     0
+    ],
+    "test/precalculus/1146.json": [
+     1,
+     1,
+     1
+    ],
+    "test/precalculus/398.json": [
+     0,
+     1,
+     0
+    ],
+    "test/precalculus/902.json": [
+     0,
+     0,
+     0
+    ]
+   },
+   "gen_count": 395,
+   "dk_calls": 0,
+   "dk_fired": 0,
+   "challenge_fired": 181,
+   "injected_chars": 112039
+  },
+  {
+   "arm": "try-harder",
+   "n_tasks": 46,
+   "trials": 138,
+   "mean_pass": 0.6956521739130435,
+   "pass_all_k": 21,
+   "pass_any_k": 40,
+   "passes": {
+    "test/algebra/1078.json": [
+     0,
+     0,
+     0
+    ],
+    "test/algebra/1199.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/1339.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/1343.json": [
+     1,
+     0,
+     1
+    ],
+    "test/algebra/2043.json": [
+     1,
+     0,
+     1
+    ],
+    "test/algebra/2253.json": [
+     1,
+     0,
+     0
+    ],
+    "test/algebra/2626.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/297.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/907.json": [
+     1,
+     1,
+     1
+    ],
+    "test/counting_and_probability/238.json": [
+     0,
+     1,
+     1
+    ],
+    "test/counting_and_probability/430.json": [
+     1,
+     0,
+     1
+    ],
+    "test/counting_and_probability/731.json": [
+     0,
+     0,
+     0
+    ],
+    "test/counting_and_probability/894.json": [
+     1,
+     1,
+     1
+    ],
+    "test/geometry/686.json": [
+     0,
+     0,
+     0
+    ],
+    "test/geometry/817.json": [
+     0,
+     0,
+     0
+    ],
+    "test/geometry/965.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1197.json": [
+     0,
+     0,
+     1
+    ],
+    "test/intermediate_algebra/1279.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1508.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1510.json": [
+     1,
+     0,
+     0
+    ],
+    "test/intermediate_algebra/345.json": [
+     0,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/362.json": [
+     1,
+     0,
+     1
+    ],
+    "test/intermediate_algebra/955.json": [
+     1,
+     1,
+     0
+    ],
+    "test/intermediate_algebra/960.json": [
+     0,
+     0,
+     0
+    ],
+    "test/intermediate_algebra/964.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/1002.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/1055.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/1065.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/109.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/1287.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/417.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/427.json": [
+     1,
+     0,
+     0
+    ],
+    "test/number_theory/516.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/631.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/753.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/838.json": [
+     1,
+     0,
+     1
+    ],
+    "test/prealgebra/1128.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1251.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1423.json": [
+     0,
+     1,
+     1
+    ],
+    "test/prealgebra/1961.json": [
+     1,
+     0,
+     1
+    ],
+    "test/prealgebra/2057.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/465.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/914.json": [
+     1,
+     1,
+     1
+    ],
+    "test/precalculus/1146.json": [
+     1,
+     1,
+     1
+    ],
+    "test/precalculus/398.json": [
+     0,
+     1,
+     0
+    ],
+    "test/precalculus/902.json": [
+     0,
+     0,
+     0
+    ]
+   },
+   "gen_count": 465,
+   "dk_calls": 0,
+   "dk_fired": 0,
+   "challenge_fired": 200,
+   "injected_chars": 2200
+  },
+  {
+   "arm": "goal",
+   "n_tasks": 46,
+   "trials": 138,
+   "mean_pass": 0.6956521739130435,
+   "pass_all_k": 20,
+   "pass_any_k": 42,
+   "passes": {
+    "test/algebra/1078.json": [
+     1,
+     0,
+     0
+    ],
+    "test/algebra/1199.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/1339.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/1343.json": [
+     0,
+     1,
+     1
+    ],
+    "test/algebra/2043.json": [
+     0,
+     0,
+     1
+    ],
+    "test/algebra/2253.json": [
+     0,
+     0,
+     0
+    ],
+    "test/algebra/2626.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/297.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/907.json": [
+     1,
+     1,
+     1
+    ],
+    "test/counting_and_probability/238.json": [
+     1,
+     0,
+     1
+    ],
+    "test/counting_and_probability/430.json": [
+     1,
+     1,
+     0
+    ],
+    "test/counting_and_probability/731.json": [
+     0,
+     1,
+     1
+    ],
+    "test/counting_and_probability/894.json": [
+     1,
+     1,
+     1
+    ],
+    "test/geometry/686.json": [
+     0,
+     1,
+     0
+    ],
+    "test/geometry/817.json": [
+     1,
+     0,
+     1
+    ],
+    "test/geometry/965.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1197.json": [
+     0,
+     0,
+     1
+    ],
+    "test/intermediate_algebra/1279.json": [
+     0,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1508.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1510.json": [
+     0,
+     1,
+     0
+    ],
+    "test/intermediate_algebra/345.json": [
+     0,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/362.json": [
+     1,
+     1,
+     0
+    ],
+    "test/intermediate_algebra/955.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/960.json": [
+     0,
+     1,
+     0
+    ],
+    "test/intermediate_algebra/964.json": [
+     0,
+     1,
+     1
+    ],
+    "test/number_theory/1002.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/1055.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/1065.json": [
+     1,
+     0,
+     0
+    ],
+    "test/number_theory/109.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/1287.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/417.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/427.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/516.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/631.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/753.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/838.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1128.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1251.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1423.json": [
+     0,
+     0,
+     0
+    ],
+    "test/prealgebra/1961.json": [
+     1,
+     1,
+     0
+    ],
+    "test/prealgebra/2057.json": [
+     1,
+     0,
+     1
+    ],
+    "test/prealgebra/465.json": [
+     0,
+     0,
+     1
+    ],
+    "test/prealgebra/914.json": [
+     0,
+     1,
+     1
+    ],
+    "test/precalculus/1146.json": [
+     1,
+     1,
+     1
+    ],
+    "test/precalculus/398.json": [
+     0,
+     0,
+     0
+    ],
+    "test/precalculus/902.json": [
+     0,
+     0,
+     0
+    ]
+   },
+   "gen_count": 483,
+   "dk_calls": 0,
+   "dk_fired": 0,
+   "challenge_fired": 204,
+   "injected_chars": 51339
+  },
+  {
+   "arm": "goal+rules",
+   "n_tasks": 46,
+   "trials": 138,
+   "mean_pass": 0.6739130434782609,
+   "pass_all_k": 20,
+   "pass_any_k": 43,
+   "passes": {
+    "test/algebra/1078.json": [
+     1,
+     0,
+     0
+    ],
+    "test/algebra/1199.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/1339.json": [
+     0,
+     1,
+     1
+    ],
+    "test/algebra/1343.json": [
+     1,
+     0,
+     0
+    ],
+    "test/algebra/2043.json": [
+     0,
+     0,
+     0
+    ],
+    "test/algebra/2253.json": [
+     0,
+     1,
+     0
+    ],
+    "test/algebra/2626.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/297.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/907.json": [
+     1,
+     1,
+     1
+    ],
+    "test/counting_and_probability/238.json": [
+     1,
+     0,
+     1
+    ],
+    "test/counting_and_probability/430.json": [
+     1,
+     1,
+     0
+    ],
+    "test/counting_and_probability/731.json": [
+     0,
+     0,
+     0
+    ],
+    "test/counting_and_probability/894.json": [
+     1,
+     1,
+     1
+    ],
+    "test/geometry/686.json": [
+     0,
+     1,
+     0
+    ],
+    "test/geometry/817.json": [
+     0,
+     0,
+     1
+    ],
+    "test/geometry/965.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1197.json": [
+     0,
+     1,
+     0
+    ],
+    "test/intermediate_algebra/1279.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1508.json": [
+     0,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1510.json": [
+     1,
+     0,
+     0
+    ],
+    "test/intermediate_algebra/345.json": [
+     0,
+     1,
+     0
+    ],
+    "test/intermediate_algebra/362.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/955.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/960.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/964.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/1002.json": [
+     0,
+     1,
+     1
+    ],
+    "test/number_theory/1055.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/1065.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/109.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/1287.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/417.json": [
+     0,
+     1,
+     0
+    ],
+    "test/number_theory/427.json": [
+     0,
+     1,
+     0
+    ],
+    "test/number_theory/516.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/631.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/753.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/838.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1128.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1251.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1423.json": [
+     0,
+     0,
+     1
+    ],
+    "test/prealgebra/1961.json": [
+     0,
+     1,
+     0
+    ],
+    "test/prealgebra/2057.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/465.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/914.json": [
+     1,
+     0,
+     1
+    ],
+    "test/precalculus/1146.json": [
+     1,
+     1,
+     1
+    ],
+    "test/precalculus/398.json": [
+     0,
+     0,
+     0
+    ],
+    "test/precalculus/902.json": [
+     0,
+     1,
+     0
+    ]
+   },
+   "gen_count": 458,
+   "dk_calls": 0,
+   "dk_fired": 0,
+   "challenge_fired": 197,
+   "injected_chars": 155045
+  },
+  {
+   "arm": "challenge-skill",
+   "n_tasks": 46,
+   "trials": 138,
+   "mean_pass": 0.6956521739130435,
+   "pass_all_k": 23,
+   "pass_any_k": 41,
+   "passes": {
+    "test/algebra/1078.json": [
+     0,
+     0,
+     0
+    ],
+    "test/algebra/1199.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/1339.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/1343.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/2043.json": [
+     0,
+     0,
+     1
+    ],
+    "test/algebra/2253.json": [
+     0,
+     0,
+     0
+    ],
+    "test/algebra/2626.json": [
+     1,
+     0,
+     1
+    ],
+    "test/algebra/297.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/907.json": [
+     1,
+     1,
+     1
+    ],
+    "test/counting_and_probability/238.json": [
+     1,
+     1,
+     1
+    ],
+    "test/counting_and_probability/430.json": [
+     0,
+     1,
+     1
+    ],
+    "test/counting_and_probability/731.json": [
+     0,
+     1,
+     1
+    ],
+    "test/counting_and_probability/894.json": [
+     1,
+     0,
+     0
+    ],
+    "test/geometry/686.json": [
+     0,
+     0,
+     1
+    ],
+    "test/geometry/817.json": [
+     0,
+     0,
+     0
+    ],
+    "test/geometry/965.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1197.json": [
+     0,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1279.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1508.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1510.json": [
+     1,
+     0,
+     1
+    ],
+    "test/intermediate_algebra/345.json": [
+     1,
+     0,
+     0
+    ],
+    "test/intermediate_algebra/362.json": [
+     1,
+     0,
+     0
+    ],
+    "test/intermediate_algebra/955.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/960.json": [
+     1,
+     0,
+     0
+    ],
+    "test/intermediate_algebra/964.json": [
+     0,
+     1,
+     1
+    ],
+    "test/number_theory/1002.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/1055.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/1065.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/109.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/1287.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/417.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/427.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/516.json": [
+     0,
+     1,
+     0
+    ],
+    "test/number_theory/631.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/753.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/838.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1128.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1251.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1423.json": [
+     0,
+     0,
+     0
+    ],
+    "test/prealgebra/1961.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/2057.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/465.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/914.json": [
+     1,
+     1,
+     0
+    ],
+    "test/precalculus/1146.json": [
+     1,
+     0,
+     0
+    ],
+    "test/precalculus/398.json": [
+     0,
+     1,
+     0
+    ],
+    "test/precalculus/902.json": [
+     0,
+     0,
+     0
+    ]
+   },
+   "gen_count": 443,
+   "dk_calls": 0,
+   "dk_fired": 0,
+   "challenge_fired": 192,
+   "injected_chars": 181248
+  },
+  {
+   "arm": "challenger",
+   "n_tasks": 46,
+   "trials": 138,
+   "mean_pass": 0.6956521739130435,
+   "pass_all_k": 23,
+   "pass_any_k": 40,
+   "passes": {
+    "test/algebra/1078.json": [
+     0,
+     0,
+     0
+    ],
+    "test/algebra/1199.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/1339.json": [
+     1,
+     1,
+     1
+    ],
+    "test/algebra/1343.json": [
+     1,
+     0,
+     1
+    ],
+    "test/algebra/2043.json": [
+     0,
+     0,
+     1
+    ],
+    "test/algebra/2253.json": [
+     1,
+     0,
+     0
+    ],
+    "test/algebra/2626.json": [
+     1,
+     1,
+     0
+    ],
+    "test/algebra/297.json": [
+     1,
+     1,
+     0
+    ],
+    "test/algebra/907.json": [
+     1,
+     1,
+     1
+    ],
+    "test/counting_and_probability/238.json": [
+     1,
+     1,
+     1
+    ],
+    "test/counting_and_probability/430.json": [
+     1,
+     1,
+     0
+    ],
+    "test/counting_and_probability/731.json": [
+     0,
+     0,
+     1
+    ],
+    "test/counting_and_probability/894.json": [
+     1,
+     1,
+     1
+    ],
+    "test/geometry/686.json": [
+     0,
+     0,
+     0
+    ],
+    "test/geometry/817.json": [
+     0,
+     0,
+     0
+    ],
+    "test/geometry/965.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1197.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1279.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1508.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/1510.json": [
+     0,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/345.json": [
+     0,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/362.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/955.json": [
+     1,
+     1,
+     1
+    ],
+    "test/intermediate_algebra/960.json": [
+     0,
+     0,
+     1
+    ],
+    "test/intermediate_algebra/964.json": [
+     1,
+     0,
+     1
+    ],
+    "test/number_theory/1002.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/1055.json": [
+     1,
+     0,
+     0
+    ],
+    "test/number_theory/1065.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/109.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/1287.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/417.json": [
+     0,
+     1,
+     0
+    ],
+    "test/number_theory/427.json": [
+     1,
+     1,
+     0
+    ],
+    "test/number_theory/516.json": [
+     0,
+     1,
+     1
+    ],
+    "test/number_theory/631.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/753.json": [
+     1,
+     1,
+     1
+    ],
+    "test/number_theory/838.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1128.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1251.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/1423.json": [
+     0,
+     0,
+     0
+    ],
+    "test/prealgebra/1961.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/2057.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/465.json": [
+     1,
+     1,
+     1
+    ],
+    "test/prealgebra/914.json": [
+     0,
+     0,
+     1
+    ],
+    "test/precalculus/1146.json": [
+     0,
+     1,
+     1
+    ],
+    "test/precalculus/398.json": [
+     0,
+     0,
+     0
+    ],
+    "test/precalculus/902.json": [
+     0,
+     0,
+     0
+    ]
+   },
+   "gen_count": 399,
+   "dk_calls": 0,
+   "dk_fired": 0,
+   "challenge_fired": 182,
+   "injected_chars": 271137
+  }
+ ]
+}

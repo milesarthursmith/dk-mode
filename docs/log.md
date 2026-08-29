@@ -6,6 +6,52 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-29 — the payload ablation: nothing beats "Try harder."
+
+Seven arms in one paired session on the 46-problem band, 3 fresh epochs,
+~1,000 trials. One shared baseline, so every comparison is in-session.
+
+    arm              mean   pass^3   injected chars
+    baseline         0.67    18/46            0
+    challenge        0.72    24/46      112,039
+    try-harder       0.70    21/46        2,200
+    goal             0.70    20/46       51,339
+    goal+rules       0.67    20/46      155,045
+    challenge-skill  0.70    23/46      181,248
+    challenger       0.70    23/46      271,137  (+ a model call per firing)
+
+Paired against baseline, nothing is significant: challenge 16/12
+(p=0.57), try-harder 16/14 (p=0.86), the rest worse. The ranking of
+payloads is flat: "Try harder." - eleven characters per firing - performs
+within noise of the 600-char self-check text, the owner's six-point
+challenge protocol, and an out-of-band adversarial reviewer that costs a
+model call per firing and injected 120x the text. If interruption helps
+at all here, its content does not matter. And even interruption's help
+is one-in-two to be luck at this n.
+
+Two footnotes with less weight. Every injected arm beats baseline's
+pass^3 (20-24 vs 18) - consistent across six arms, but they all share the
+one baseline, so a single unlucky baseline explains it. And a separate
+dk run under Haiku landed mean 0.73, pass^3 28/46 - nominally the best
+number of the day, but it ran without an in-session baseline, so it is a
+lead to confirm, not a result.
+
+The monitor-model swap (gpt-oss-120b) died on HTTP 403: the OpenRouter
+KEY has a $50 total-spend limit, now exhausted - distinct from the
+account balance, which still holds $18. Roughly $50 spent across the
+whole day, most of it on the maths programme's ~1,700 trials.
+
+Where this leaves the question: on short maths tasks, no injection
+policy - selected, scheduled, generic, goal-restating, or adversarial -
+separates from baseline at n=46x3. The maths domain has served its
+purpose: the machinery is proven, injections are readable, and the
+honest summary is "small-or-no effect, content-independent". The claim
+dk-mode actually makes lives on long-horizon coding tasks, and the
+harness that tests it there - real hooks, real Claude Code - is built,
+verified, and waiting on the key limit.
+
+---
+
 ## 2026-08-28 — the shipped plugin verified end to end under real Claude Code
 
 evals/hooked had its first successful flight: a real Claude Code binary in
