@@ -6,6 +6,51 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-29 — the real-hooks comparison: another null, and this one counts
+
+The first valid comparison of the programme. Real Claude Code, the shipped
+plugin's hooks firing as processes in the sandbox, the current monitor
+(tiered window, arc gate, directive alerts), LiveCodeBench easy+medium,
+held-out scoring, 20 tasks x 3 epochs per arm, all three arms 60/60 with
+zero errors. Verified before reading the numbers: the dk arm carries **50
+live monitor blocks** beside 62 static and 5 tripwire, so the model-based
+layer really spoke.
+
+    arm         mean   pass^3   pass@3
+    bare        0.75   10/20    18/20
+    dk          0.72   10/20    17/20
+    challenge   0.73   11/20    18/20
+
+    dk        vs bare       5-7   p=0.77
+    challenge vs bare       3-3   p=1.00
+    dk        vs challenge  5-7   p=0.77
+
+Nothing separates. dk sits marginally BELOW the no-injection control on
+mean and pass@3, level on pass^3, and the paired tests are as far from
+significance as they can be. The scheduled control is also flat, so this
+is not "selection lost to a schedule" - it is that no injection policy
+moved completion here either.
+
+**Why this null is worth more than the maths ones.** Every excuse the
+earlier nulls left open has now been closed: the task horizon is real
+(median 9 assistant turns, real test-fix cycles), the pass rate is in the
+band where procedural failures are visible (0.75, not 0.12), the plumbing
+is verified live rather than assumed, and the monitor is the rebuilt one
+that can see an arc. The instrument was capable of showing an effect and
+showed none.
+
+**The honest limit on it.** n=20 tasks, and only 8 of them are flaky in
+the control - tasks passed always or never cannot move, so the effective
+sample for detecting steering is 8 paired tasks. That is far too few for
+a 10-point effect; the power calculation wants ~113-161 paired
+observations. This run rules out a large effect, not a small one.
+
+Cost: $3.83 in two aborted runs plus ~$3.50 here. Two failures on the way
+were mine, and both are now guarded in code: an OOM from 8 concurrent 2GB
+containers on a 15GB host, and a scorer that let a solution's timeout kill
+the whole arm instead of scoring that sample incorrect.
+
+
 ## 2026-08-29 — a coding instrument with an arc, built for nothing
 
 The maths band was retired on a fair objection: 2-12 turns on a single

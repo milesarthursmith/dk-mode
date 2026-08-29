@@ -53,3 +53,6 @@ SWE-style scaffold (bash, python, file editor) with ten submissions.
 | 2026-08-29_0438 | math500-band | band(46) | agentic/3ep | 46 | openrouter/google/gemini-2.5-flash-lite | challenger | 0.72 | 0 | pass^k 26/46 |
 | 2026-08-29_0822 | math500-band | band(46) | agentic/3ep | 46 | openrouter/google/gemini-2.5-flash-lite | baseline | 0.70 | 0 | pass^k 23/46 |
 | 2026-08-29_0822 | math500-band | band(46) | agentic/3ep | 46 | openrouter/google/gemini-2.5-flash-lite | dk | 0.75 | 138 | pass^k 23/46 |
+| 2026-08-29 | lcb-easy-med | hooked/realCC | agentic/3ep | 20 | gemini-2.5-flash-lite | bare | 0.75 | 0 | pass^3 10/20 |
+| 2026-08-29 | lcb-easy-med | hooked/realCC | agentic/3ep | 20 | gemini-2.5-flash-lite | dk | 0.72 | 50 | pass^3 10/20 |
+| 2026-08-29 | lcb-easy-med | hooked/realCC | agentic/3ep | 20 | gemini-2.5-flash-lite | challenge | 0.73 | 0 | pass^3 11/20 |
