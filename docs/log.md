@@ -661,20 +661,29 @@ Stated plainly because the README does not.
    1. **No credentials in the container.** The compose file had no
       `environment:` block until 2026-08-29, so `dk_watch` took its
       no-key exit. Fixed.
-   2. **No egress from the container.** `dk_watch` calls a model from
-      inside the sandbox. Where the host reaches the internet through a
-      local proxy, the container can see neither the proxy (bound to host
-      loopback) nor a valid TLS chain; `curl` failed with exit 60.
-      Invisible in transcripts, because the other two hooks need no
-      network. Fixed via `DK_NET_MODE`/`DK_CA_BUNDLE`.
+   2. **No TLS trust in the container.** `dk_watch` calls a model from
+      inside the sandbox. Where egress is re-terminated by a policy proxy,
+      the container reaches the host but cannot verify the chain (`curl`
+      exit 60). Invisible in transcripts, because the other two hooks need
+      no network. Fixed by mounting the proxy CA (`DK_CA_BUNDLE`). Note
+      `network_mode: host` is the wrong fix and was tried first: it makes
+      each sample's inspect_swe model proxy collide on one port
+      (Errno 98).
    3. **One prompt per sample.** `dk_watch` runs on Stop and writes its
       verdict for the NEXT `UserPromptSubmit`; recall is the only reader.
       A headless single-prompt session has no next prompt, so the monitor
       cannot deliver however well it is configured. `attempts` raised
       from 1 to 6.
 
-   None of the three is yet demonstrated fixed: no hooked run has produced
-   a live monitor block. The maths and coding harnesses are unaffected -
+   With all three fixed, a 2-sample run on 2026-08-29 produced **5 live
+   monitor blocks** alongside 2 static notes - the first time the shipped
+   model-based monitor has run inside a real Claude Code session in this
+   harness, and the point at which EVALS.md rule 1 is actually met. The
+   selections themselves were poor (a "skims instead of reading" rule on a
+   coding task, and rule-only blocks carrying no directive), which is a
+   separate problem from the plumbing.
+
+   The maths and coding harnesses are unaffected -
    there `dk_watch` runs in the eval process on the host, with 369/517/494
    monitor calls recorded and every payload logged per sample
    (`dk_fired`, `dk_payload_log`).
