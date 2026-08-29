@@ -18,6 +18,7 @@ evals/impossiblebench/logs/
 evals/math/logs/
 evals/math/band.json
 evals/hooked/logs/
+evals/lcb/logs/
 
 # The hooked sandbox stages a copy of the plugin at build time.
 evals/hooked/plugin/
