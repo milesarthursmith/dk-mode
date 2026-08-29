@@ -6,6 +6,30 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-29 — the monitor ablation: a smarter monitor changes nothing
+
+The hypothesis that the maths-band nulls trace to a weak monitor (Haiku)
+was tested by re-running the dk and challenger arms with a reasoning model
+(gpt-oss-120b, 8k thinking budget) as the monitor. Same 46-task band, same
+agent (Gemini Flash Lite), 3 epochs, old injection format (the run imported
+the prompt before the directive-style change landed).
+
+    arm                    mean  pass^3  fire rate  vs haiku counterpart
+    dk(gpt-oss-120b)       0.70  23/46   19%        9-15, p=0.31
+    challenger(gpt-oss)    0.72  26/46   43%        11-7, p=0.48
+
+Neither arm differs measurably from its Haiku-monitored counterpart
+(dk/haiku 0.73 at a 17% fire rate; challenger/haiku 0.70 at 46%), and
+neither separates from the 2026-08-29_0111 baseline (0.67; p=0.46 and 0.38,
+cross-session pairing). The reasoning monitor fires at the same rate,
+selects similarly, and buys nothing.
+
+Read together with the payload ablation, the picture is consistent: on this
+instrument neither what is injected nor who writes it moves completion.
+The monitor model is not the bottleneck; the instrument's task horizon is
+the suspect. Remaining untested: the directive-style injection format, and
+everything on long-horizon tasks (`evals/hooked`).
+
 ## 2026-08-29 — the injection now speaks to the agent, not about it
 
 Trace review of the dk arm (2026-08-29_0231 run) showed the injection
