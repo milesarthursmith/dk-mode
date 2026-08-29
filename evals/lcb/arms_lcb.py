@@ -79,14 +79,26 @@ def setup(hooks: bool):
 
 @scorer(metrics=[accuracy(), stderr()])
 def held_out():
-    """Run the hidden cases against whatever the agent left in func.py."""
+    """Run the hidden cases against whatever the agent left in func.py.
+
+    Every failure mode here is a FAILED SAMPLE, never a failed run. The
+    hidden cases are larger than the visible ones, so a brute-force
+    solution that passes the examples can exceed the time limit on them -
+    that is the agent failing the task, not the harness breaking. An
+    earlier version let the timeout propagate and it killed two arms
+    mid-run at 20 and 14 of 60 samples, which is unusable for a
+    comparison and costs the whole spend."""
     async def score(state, target):
-        await sandbox().write_file("held.py", state.metadata["held_out"])
-        r = await sandbox().exec(["python", "held.py"], timeout=120)
-        return Score(
-            value=CORRECT if r.returncode == 0 else INCORRECT,
-            answer=("passed" if r.returncode == 0 else "failed"),
-            explanation=(r.stderr or r.stdout or "")[-600:])
+        try:
+            await sandbox().write_file("held.py", state.metadata["held_out"])
+            r = await sandbox().exec(["python", "held.py"], timeout=45)
+            ok = r.returncode == 0
+            why = (r.stderr or r.stdout or "")
+        except Exception as e:                       # timeout, dead sandbox
+            ok, why = False, f"{type(e).__name__}: {e}"
+        return Score(value=CORRECT if ok else INCORRECT,
+                     answer=("passed" if ok else "failed"),
+                     explanation=why[-600:])
     return score
 
 
