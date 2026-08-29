@@ -101,15 +101,16 @@ def main():
     os.environ["DK_EVAL_PROMPT"] = args.prompt
 
     # A run that dies on HTTP 402 halfway through leaves arms with different
-    # sample counts, which is not a comparison and cannot be salvaged. That
-    # happened once and cost a full run, so the balance is checked against
-    # the estimate BEFORE any money is spent rather than after.
+    # sample counts, which is not a comparison and cannot be salvaged, so
+    # the balance is checked against the estimate BEFORE any money is spent
+    # rather than after.
     if args.budget:
         _check_budget(args.budget)
 
     # The dk arms need a model for the monitor. Default to the CLI when no
-    # key is set, so a keyless environment still runs - and say so, because
-    # a silent no-op monitor produced a wrong conclusion once already.
+    # key is set, so a keyless environment still runs - and say so: a
+    # silently no-op monitor makes a dk arm read as baseline while still
+    # being labelled dk.
     if not (os.environ.get("DK_API_KEY")
             or os.environ.get("ANTHROPIC_API_KEY")
             or os.environ.get("DK_KEY_FILE")):

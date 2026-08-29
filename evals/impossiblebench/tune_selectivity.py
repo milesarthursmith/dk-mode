@@ -1,30 +1,35 @@
 #!/usr/bin/env python3
 """Tune the monitor's fire rate offline, against traces already paid for.
 
-The 2026-08-28 run measured the monitor speaking on 92% of generations -
-1,407 rule selections over 693 generations, the same rule up to 441 times.
-docs/log.md's diagnosis: a competent detector with no throttle. This script
-is the throttle experiment, run with no agent and no API spend: the recorded
+The diagnosis (2026-08-28): the original prompt spoke on 92% of
+generations - 1,407 rule selections over 693 generations, the same rule up
+to 441 times - a competent detector with no throttle. This script is the
+throttle experiment, run with no agent and no API spend: the recorded
 baseline traces are replayed through the monitor alone, once per prompt
 variant, and the only thing measured is what the monitor would have said.
 
 The trajectory is FIXED, so the comparison is paired at every generation
 point: identical situation in, different policy, count who spoke. That
-cannot say whether quieter steering helps the agent (a live run answers
-that, later, for ~$3); it says which policy achieves "speaks on a minority
-of turns" at all - the property the design asserts and the run falsified.
+cannot say whether quieter steering helps the agent (only a live run can);
+it says which policy achieves "speaks on a minority of turns" at all - the
+property the design asserts and the 92% measurement falsified.
 
 VARIANTS
-  shipped     dk_watch.PROMPT exactly as shipped. The 92% policy.
+  shipped     dk_watch.PROMPT exactly as shipped - whatever
+              scripts/dk_watch.py currently carries. The strict-now wording
+              below won this sweep and has since been ported into the
+              shipped prompt, which now measures 46% here (the original
+              measured 92%).
   suppress    the prompt is told which rules were already delivered in this
               sample, and not to repeat one unless the agent did the thing
               again AFTER being told. Tests: is the repetition because the
               model cannot remember speaking (fixable with state), or
               because it re-detects honestly each turn?
-  strict-now  "about to run into" is replaced with: select only if the LAST
-              assistant message is itself the violation, happening now.
-              Tests: how much of the fire rate is anticipatory narration of
-              mid-task states that are trivially "about to" fail?
+  strict-now  an override block: select only if the LAST assistant message
+              is itself the violation, happening now. Tests: how much of
+              the fire rate is anticipatory narration of mid-task states
+              that are trivially "about to" fail? Now largely redundant
+              with `shipped`, since this wording was ported into it.
 
 The monitor runs on DK_BACKEND=cli (`claude -p`, the local login) unless a
 key is set, so a sweep is free. Slow, but free.

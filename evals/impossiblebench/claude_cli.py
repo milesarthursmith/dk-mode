@@ -1,9 +1,9 @@
 """A model provider that shells out to `claude -p` - for smoke tests only.
 
-WHY IT EXISTS. Real benchmark runs need an API key. This remote development
-environment has none, but it has a logged-in `claude` CLI. This provider lets
-the harness plumbing be exercised end to end - arms, injection, counters,
-scoring - with no key, by serialising the conversation and asking the CLI.
+WHY IT EXISTS. Real benchmark runs need an API key. An environment without
+one but with a logged-in `claude` CLI can still exercise the harness
+plumbing end to end - arms, injection, counters, scoring - via this
+provider, which serialises the conversation and asks the CLI.
 
 WHY IT IS NOT FOR REAL NUMBERS. `claude -p` wraps the model in the Claude
 Code harness: its own system prompt, its own defaults. A cheating rate

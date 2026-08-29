@@ -19,7 +19,7 @@ what to say and when, not between plumbing:
                       call, no selection step - it cannot fail by picking the
                       wrong rule or picking nothing. This is both the dumb
                       control and a feature candidate (docs/log.md,
-                      2026-08-27, "periodic challenge").
+                      "periodic challenge").
     arm_dk_challenge  both.
 
 If arm_challenge matches arm_dk, the selection layer is not earning its
@@ -123,8 +123,9 @@ def _static_note():
 # The scheduled arm's payload is a knob, not a constant. Every entry fires
 # on the same schedule with the same machinery; only the text differs, so a
 # comparison between payloads is a comparison between texts and nothing
-# else. EVALS.md queued exactly this ablation for the moment the schedule
-# had a number - it has one now.
+# else. Measured 2026-08-29 (MATH-500, 46-task band): no payload separated
+# from baseline significantly, and "Try harder." was within noise of the
+# richest payloads.
 PAYLOADS = {
     # the periodic self-check text (stand-in for the challenge skill)
     "challenge": lambda state: challenge_text(),
@@ -168,8 +169,8 @@ Reply with the report only, under 1200 characters, no preamble.
 
 
 def _challenger_payload(state, messages):
-    """The same skill run the way docs/log.md's open question proposed: by a
-    SEPARATE model reading the transcript, not by the agent grading itself.
+    """The same skill run out-of-band: a SEPARATE model reads the
+    transcript, instead of the agent grading itself.
     One model call per firing - the same cost shape as the dk monitor, but
     free-form adversarial review instead of rule selection. The skill's
     web_search/read_file tools are not provided; it reviews the transcript

@@ -1,28 +1,29 @@
 #!/usr/bin/env python3
-"""Score the behaviour in a run's traces, not just the task outcome.
+"""Diagnostic counters over a run's traces, read beside the task outcome.
 
-WHY THIS EXISTS. Three runs measured task pass/fail and all three said
-nothing (docs/log.md, 2026-08-28). The reason is structural rather than bad
-luck: on these benchmarks the outcome is decided by whether the model knows
-the algorithm, and dk-mode does not supply algorithms. It steers process. So
-a pass rate asks a question dk-mode was never claiming to answer, and buries
-whatever it does do inside a coin flip it cannot influence.
+WHY THIS EXISTS. On these benchmarks the outcome is decided largely by
+whether the model knows the algorithm, and dk-mode does not supply
+algorithms - it steers process. The rules dk-mode ships name specific,
+observable process failures, and an agent trace records whether each one
+happened; the counters here script that from the log with no hand labels
+and no judge model.
 
-The rules dk-mode ships name specific, observable process failures, and an
-agent trace records whether each one happened. Measuring those directly
-gives a metric that (a) has a high base rate, so there is headroom to move,
-(b) is scriptable from the log with no hand labels and no judge model, and
-(c) tests the mechanism dk-mode actually claims.
+THESE ARE DIAGNOSTICS, NOT THE PRIMARY SIGNAL. Each counter is a
+deterministic heuristic with heuristic blind spots: `repeats` counts any
+identical tool call, including legitimate re-tests (running test.py again
+after a fix lands here); `redundant_views` cannot see why a file was
+re-read. A moved counter is a reason to read the trace (trace_view.py),
+not a verdict.
 
 WHAT IS COUNTED, and the shipped rule each one corresponds to:
 
-  unverified_done   submitted after editing, with no test run in between.
-                    "claims something is done without checking" - the most
-                    frequent flag in the 40-turn replay (docs/log.md 08-27).
+  unverified_done   submitted after editing, with no test run in between -
+                    "claims something is done without checking".
   never_tested      never ran the tests at all, the degenerate case.
   repeats           a tool call identical to one already made. MAST puts
                     step repetition at 15.7%, the single most common failure
-                    mode across 1600+ annotated traces.
+                    mode across 1600+ annotated traces - but deliberate
+                    re-tests land here too; see above.
   redundant_views   re-reading a file already read, with no edit in between
                     - the read spiral the tripwire watches for.
   steps             tool calls used. Not a failure, but the cost of any

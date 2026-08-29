@@ -1,8 +1,8 @@
 """Three arms on MATH-500: pure task completion, scored against answer keys.
 
-WHY MATHS, after two coding benchmarks. The owner's objection to unit-test
-scoring is that a test suite is authored and can be wrong or gameable. A
-maths problem is scored against an answer KEY - a fact about the problem -
+WHY MATHS, after two coding benchmarks. Unit-test scoring rests on an
+authored test suite, which can be wrong or gameable. A maths problem is
+scored against an answer KEY - a fact about the problem -
 and `math_verify` decides equivalence deterministically (1/2 == 0.5 ==
 \\frac{1}{2}), so completion needs no judge model and no trusted tests.
 Two further properties bought cheaply:
