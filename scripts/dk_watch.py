@@ -714,7 +714,7 @@ def parse_selection(text, rules):
         # Truncate, never discard: dropping an over-length alert silently
         # turns a directive into a bare rule card, which is the old format's
         # failure mode reappearing through the parser.
-        alert = alert.strip()[:300]
+        alert = alert.strip()[:600]
     steering = data.get("steering")
     if not isinstance(steering, list):
         steering = []
