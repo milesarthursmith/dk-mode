@@ -6,6 +6,38 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-29 — the window: judge the work, not the last message
+
+Two critiques from review of the full traces, both correct:
+
+1. The strict gate ("the violation must BE the last assistant message")
+   bought the 92%→46% fire-rate fix by making the monitor myopic. Measured
+   over 288 selections in the dk runs: 91% snapshot rules, 7% arc rules -
+   the rules that need history ("repeats a step", "ignores a constraint",
+   "forgets a decision") had been structurally disabled.
+2. The window walked back to the last two USER messages - an anchor that
+   does not exist in an autonomous run, leaving "the last 9,000 chars"
+   as the accidental window.
+
+Change shipped (`recent_work()` replacing the live window): a tiered
+window over the last 100 assistant messages - newest 10 in full text,
+the rest digested to one line each (~160 chars). Repetition survives
+digestion, so a loop is visible as the same line recurring; drift is
+visible against the pinned GOAL. The brief remains the layer beyond the
+window - a cumulative digest rewritten every call - and the raw digest
+lines are the check against it, because the brief is model-written memory
+and was observed asserting work that never happened (the 1055 trace).
+The gate now asks for a violation visible in the window and still live,
+instead of embodied in one message.
+
+Free replay over recorded dk traces: 9% fire rate, and on the sample that
+looped for 12 generations the monitor selected "Repeats a step already
+taken" - the arc rule the old gate could not fire. Also fixed: an alert
+over 300 chars was silently discarded by the parser, turning directives
+back into bare rule cards; now truncated instead. Unmeasured in a live
+comparison; 119 tests pass.
+
+
 ## 2026-08-29 — the directive format: same null, and the band is exhausted
 
 First measured run of the second-person directive injection format

@@ -1412,6 +1412,27 @@ print(sum(len(x['text']) for x in w) <= 400, len(w) > 0)
 ")
 if [ "$res" = "True True" ]; then ok; else bad "cap not honoured: $res"; fi
 
+t "105b. tiered window: newest AI messages full, older digested, loop lines survive"
+res=$(CLAUDE_PROJECT_DIR="$SB" python3 -c "
+import importlib.util
+spec = importlib.util.spec_from_file_location('w', '$SCRIPTS/dk_watch.py')
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+msgs = [{'uuid': 'a%d' % i, 'role': 'assistant', 'cwd': '', 'ts': '',
+         'text': ('LOOP: rerun the same failing test with no change ' * 12)}
+        for i in range(40)]
+w = m.recent_work(msgs, ai_window=30, ai_full=10, char_cap=100000)
+digested = [x for x in w if x['text'].endswith('...')]
+full = [x for x in w if not x['text'].endswith('...')]
+loop_visible = sum(1 for x in digested if 'LOOP: rerun the same' in x['text'])
+print(len(w), len(full), len(digested), loop_visible, w[-1]['uuid'])
+")
+set -- $res
+# 30 AI messages total, newest 10 in full, 20 digested one-liners in which
+# the repeated action is still recognisably the same line.
+if [ "$1" = 30 ] && [ "$2" = 10 ] && [ "$3" = 20 ] && [ "$4" = 20 ] \
+   && [ "$5" = "a39" ]; then ok
+else bad "window=$1 full=$2 digested=$3 loop_lines=$4 last=$5"; fi
+
 trip() {  # trip <session> <tool> <input-json> <output>
   printf '{"session_id":"%s","tool_name":"%s","tool_input":%s,"tool_output":%s}' \
     "$1" "$2" "$3" "$4" | DK_MEM="$SB/.claude/memory" \

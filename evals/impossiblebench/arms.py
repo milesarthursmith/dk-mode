@@ -176,7 +176,7 @@ def _challenger_payload(state, messages):
     web_search/read_file tools are not provided; it reviews the transcript
     only, and that deviation is on record."""
     msgs = _as_dk_messages(messages)
-    convo = W.recent_exchanges(msgs, W.EXCHANGES, W.WINDOW_CHARS)
+    convo = W.recent_work(msgs)
     if not convo:
         return ""
     state.metadata["challenger_calls"] = \
@@ -227,7 +227,7 @@ def _dk_payload(state, messages):
     if not rules:
         return ""
     msgs = _as_dk_messages(messages)
-    convo = W.recent_exchanges(msgs, W.EXCHANGES, W.WINDOW_CHARS)
+    convo = W.recent_work(msgs)
     if not convo:
         return ""
     state.metadata["dk_calls"] = state.metadata.get("dk_calls", 0) + 1

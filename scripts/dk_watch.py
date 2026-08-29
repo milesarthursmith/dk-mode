@@ -114,10 +114,21 @@ WATCH_MODELS = [m.strip() for m in os.environ.get(
 TURNS = int(os.environ.get("DK_WATCH_TURNS", "6"))
 # How many of the user's own messages the window must reach back to include.
 # Two means the current exchange plus the one before it, however many messages
-# Claude produced inside them.
+# Claude produced inside them. Used by the backfill path only; the live
+# window is recent_work() below.
 EXCHANGES = int(os.environ.get("DK_WATCH_EXCHANGES", "2"))
+# The live window is tiered: this many assistant messages are visible in
+# total, the newest AI_FULL of them in full text and the rest digested to
+# one line each. Digest lines cost ~160 chars, so depth is nearly free -
+# 100 messages of tail is ~16k chars. The BRIEF is the layer beyond even
+# this: a cumulative digest rewritten every call, carrying the arc since
+# turn 1; the window is the raw record it is checked against, because a
+# model-written memory can assert things that never happened. A digest line is enough to spot a loop - the same line
+# appearing again IS the loop - and the pinned GOAL is enough to spot drift.
+AI_WINDOW = int(os.environ.get("DK_WATCH_AI_MSGS", "100"))
+AI_FULL = int(os.environ.get("DK_WATCH_AI_FULL", "10"))
 # Ceiling on the window, so one 25-message turn cannot fill the prompt.
-WINDOW_CHARS = int(os.environ.get("DK_WATCH_CHARS", "9000"))
+WINDOW_CHARS = int(os.environ.get("DK_WATCH_CHARS", "26000"))
 TIMEOUT = int(os.environ.get("DK_WATCH_TIMEOUT", "120"))
 MAX_ACTIVE = 3
 # Ceiling on how many rules are described to the model each turn.
@@ -306,12 +317,49 @@ def recent_exchanges(msgs, want_users, char_cap):
     return out
 
 
+def recent_work(msgs, ai_window=None, ai_full=None, char_cap=None):
+    """The window an autonomous run needs: the head in full, the tail in
+    digest.
+
+    An autonomous session has no user messages to anchor a window on, and a
+    loop is invisible at any depth a full-text window can afford - the runs
+    that loop do it over 12-25 messages. So the window is tiered: the newest
+    `ai_full` assistant messages (plus anything interleaved with them) carry
+    full text, which is where "happening right now" is judged, and assistant
+    messages back to `ai_window` are digested to one line each. Repetition
+    survives digestion - identical work produces identical lines - and drift
+    shows against the pinned GOAL. `char_cap` still bounds the whole window,
+    dropping oldest first."""
+    ai_window = AI_WINDOW if ai_window is None else ai_window
+    ai_full = AI_FULL if ai_full is None else ai_full
+    char_cap = WINDOW_CHARS if char_cap is None else char_cap
+    out, ai_seen, chars = [], 0, 0
+    for msg in reversed(msgs):
+        if msg["role"] == "assistant":
+            ai_seen += 1
+            if ai_seen > ai_window:
+                break
+        if ai_seen <= ai_full:
+            text = msg["text"]
+        else:
+            flat = " ".join(msg["text"].split())
+            text = flat if len(flat) <= 160 else flat[:160] + " ..."
+        if out and chars + len(text) > char_cap:
+            break
+        m = dict(msg)
+        m["text"] = text
+        out.append(m)
+        chars += len(text)
+    out.reverse()
+    return out
+
+
 def transcript_windows(path, n, whole=False):
     """The recent window, or - for backfill - every window of a whole
     transcript so history is covered rather than sampled."""
     msgs = _read_messages(path)
     if not whole:
-        return recent_exchanges(msgs, EXCHANGES, WINDOW_CHARS)
+        return recent_work(msgs)
     cap = int(os.environ.get("DK_BACKFILL_WINDOWS", "40"))
     return [msgs[i:i + n] for i in range(0, len(msgs), n)][:cap] or []
 
@@ -364,11 +412,12 @@ def _read_messages(path):
 PROMPT = """You do two jobs on one conversation between a coding agent and \
 its user. Answer with JSON only, no prose, no code fences.
 
-You are given a BRIEF: what this conversation is for, and where it has got
-to. The recent messages are only the last two exchanges, so the brief is the
-only thing that tells you the arc. Use it. A step repeated, a constraint
-ignored, a decision forgotten and a different problem solved are all invisible
-without it.
+You are given a BRIEF (what this conversation is for and where it has got
+to) and a window of recent messages. The newest messages carry full text;
+older ones are digested to one line each, ending "...". A digest line is
+still evidence: the same line appearing several times IS a loop, and work
+that stopped serving the GOAL is drift, visible by comparing the lines to
+the brief's GOAL. Anything older than the window lives only in the brief.
 
 JOB 3 - update the brief. Return it with the same short labelled lines. Keep
 what still holds, add what this turn established, drop what is settled and no
@@ -376,15 +425,17 @@ longer needed. Do not write a GOAL line: it is copied from the first message
 and you cannot change it. Under 1000 characters.
 
 JOB 1 - which rules are being violated RIGHT NOW. Select a rule ONLY when \
-the last assistant message is itself the violation, already happening: it \
-claimed done without checking, it repeated a step already taken, it gave \
-the shallow answer. Not a risk, not a tendency, not something the agent is \
-"about to" do, and never because a rule is true in general - being in the \
-middle of unfinished work is not a violation. A rule you have already \
-selected in this conversation is covered: do not select it again unless the \
-agent did that exact thing again afterwards. If the evidence is anything \
-other than the last assistant message itself, return an empty active list. \
-The correct answer is usually an empty list. At most {max_active}.
+the violation is visible in the window AND still live in the newest \
+messages: it claimed done without checking, it is walking a circle the \
+digest lines show, it has drifted off the GOAL, it ignored a constraint \
+the brief records. Point at the message ids that are the evidence. Not a \
+risk, not a tendency, not something the agent is "about to" do, and never \
+because a rule is true in general - being in the middle of unfinished work \
+is not a violation, and slow progress is progress. A rule you have already \
+selected in this conversation is covered: do not select it again unless \
+the agent did that exact thing again AFTER being told. If nothing in the \
+window is a live violation, return an empty active list. The correct \
+answer is usually an empty list. At most {max_active}.
 
 When you select any rule you MUST also write an "alert"; without a \
 selection it is optional. The alert speaks directly TO the agent as "you", \
@@ -657,8 +708,13 @@ def parse_selection(text, rules):
     valid = {r["id"] for r in rules}
     active = [i for i in data.get("active", []) if isinstance(i, int) and i in valid]
     alert = data.get("alert")
-    if not isinstance(alert, str) or not alert.strip() or len(alert) > 300:
+    if not isinstance(alert, str) or not alert.strip():
         alert = None
+    else:
+        # Truncate, never discard: dropping an over-length alert silently
+        # turns a directive into a bare rule card, which is the old format's
+        # failure mode reappearing through the parser.
+        alert = alert.strip()[:300]
     steering = data.get("steering")
     if not isinstance(steering, list):
         steering = []

@@ -127,7 +127,7 @@ def replay_chain(sample_id, messages, points, variant):
     first = next((m["text"] for m in messages if m["role"] == "user"), "")[:300]
     for pt in points:
         prefix = messages[:pt]
-        convo = W.recent_exchanges(prefix, W.EXCHANGES, W.WINDOW_CHARS)
+        convo = W.recent_work(prefix)
         if not convo:
             continue
         prompt_tpl = build_prompt(variant, delivered)
