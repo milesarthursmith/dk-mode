@@ -57,3 +57,4 @@ SWE-style scaffold (bash, python, file editor) with ten submissions.
 | 2026-08-29 | lcb-easy-med | hooked/realCC | agentic/3ep | 20 | gemini-2.5-flash-lite | dk | 0.72 | 50 | pass^3 10/20 |
 | 2026-08-29 | lcb-easy-med | hooked/realCC | agentic/3ep | 20 | gemini-2.5-flash-lite | challenge | 0.73 | 0 | pass^3 11/20 |
 | 2026-08-30 | swe-verified-easy | hooked/realCC | pilot/1ep | 6 | gemini-2.5-flash-lite | bare | 0.17 | - | 5/5 failures procedural |
+| 2026-08-30 | swe-verified-easy | hooked/realCC | pilot/1ep | 20 | gemini-2.5-flash-lite | bare | 0.15 | - | 7/20 one-turn surrenders; engaged pass ~0.43 |

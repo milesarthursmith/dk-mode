@@ -6,6 +6,31 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-30 — full pilot n=20: the failure is turn-1 surrender, and it's cheap to test
+
+Epoch ghcr images (authenticated; ~12GB for all 20 via shared layers vs
+~50GB from Docker Hub) let the full 20-instance pilot run. message_limit
+raised 30 -> 100. Score: **3/20 (0.15)** - the raised cap changed nothing,
+so the cap was never the constraint. The per-sample profile is the result:
+
+    7/20 samples: 1 turn, 0 tool calls - read the bug report, stopped
+    6/20 samples: quit within 2-5 turns
+    7/20 samples: engaged (7+ turns) - of these, 3 PASSED
+
+Direct evidence the failure is stochastic disengagement, not capability:
+django-14373 passed the first pilot in 14 working turns, then surrendered
+at turn 1 here; django-16255 did the reverse (2-turn hallucination stall
+before, 19 turns and a pass now). Same task, same model. Whether the
+agent engages at all is the dominant coin-flip, and turn-1 surrender is
+the most steerable failure that exists - precisely what a monitor that
+says "you have not started; use your tools" is for. Engaged attempts pass
+at ~0.43; if steering converted the surrenders, the ceiling is ~0.4
+against a 0.15 baseline - a large, detectable effect at n=20 x 2 epochs.
+
+Cost: ~$0.011/sample ($0.22 for the pilot). A full three-arm comparison
+projects to $2-4, within the current balance - no top-up needed after all.
+
+
 ## 2026-08-30 — SWE-bench pilot: the failures finally match the mechanism
 
 Pilot of the real-repo instrument: 6 SWE-bench Verified instances
