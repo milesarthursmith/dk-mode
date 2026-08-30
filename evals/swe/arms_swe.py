@@ -33,6 +33,7 @@ from inspect_ai.dataset import MemoryDataset
 from inspect_ai.model import ChatMessageUser, GenerateInput
 from inspect_ai.solver import chain, solver
 from inspect_ai.util import sandbox
+from inspect_ai.util import SandboxEnvironmentSpec
 from inspect_evals.swe_bench import swe_bench
 from inspect_swe import claude_code
 
@@ -52,7 +53,7 @@ IDS = set(open(os.environ.get(
 DK_ENV = (
     "DK_MEM=/opt/dk-mem"
     " DK_BACKEND=openai"
-    " DK_API_URL=https://openrouter.ai/api/v1/chat/completions"
+    " DK_API_URL=http://relay:8080/api/v1/chat/completions"
     " DK_API_KEY={key}"
     " DK_WATCH_MODELS=google/gemini-2.5-flash"
     " SSL_CERT_FILE=/opt/dk-ca.crt"
@@ -137,10 +138,55 @@ def _challenge_filter(every: int):
     return filter
 
 
+# swe_bench generates each sandbox with network_mode:none - correct for
+# the agent (the repos' fix commits are public; a networked agent could
+# `git fetch` the answer), fatal for dk_watch (Errno -3 resolving
+# openrouter.ai; see the 2026-08-30 smoke probe). So every arm gets the
+# same topology: testbed on an internal-only network plus a relay sidecar
+# that forwards ONLY monitor calls to openrouter.ai via its own egress
+# network. Identical agent-visible world in all arms; only dk uses it.
+COMPOSE_DIR = os.path.join(HERE, "logs", "compose")
+COMPOSE_TMPL = """\
+services:
+  default:
+    image: {image}
+    command: sleep infinity
+    working_dir: /testbed
+    networks: [inner]
+  relay:
+    image: python:3.11-slim
+    command: python /relay.py
+    volumes:
+      - {relay_py}:/relay.py:ro
+      - {ca}:/etc/ssl/certs/policy-ca.pem:ro
+    environment:
+      SSL_CERT_FILE: /etc/ssl/certs/policy-ca.pem
+    networks: [inner, egress]
+networks:
+  inner:
+    internal: true
+  egress: {{}}
+"""
+
+
+def _isolated_spec(sample):
+    os.makedirs(COMPOSE_DIR, exist_ok=True)
+    path = os.path.join(COMPOSE_DIR, f"{sample.id}-compose.yaml")
+    with open(path, "w") as f:
+        f.write(COMPOSE_TMPL.format(
+            image=sample.metadata["image_name"],
+            relay_py=os.path.join(HERE, "relay.py"),
+            ca=CA_LOCAL))
+    return SandboxEnvironmentSpec(type="docker", config=path)
+
+
 def make_task(name, hooks, challenge_every=0):
     t = swe_bench()               # default template = Epoch ghcr images
     t._name = f"swe_{name}"       # Task.name property reads self._name
-    t.dataset = MemoryDataset([s for s in t.dataset if str(s.id) in IDS])
+    keep = [s for s in t.dataset if str(s.id) in IDS]
+    for smp in keep:
+        smp.sandbox = _isolated_spec(smp)
+    t.dataset = MemoryDataset(keep)
     assert len(t.dataset) == len(IDS)
     agent = claude_code(
         cwd="/testbed",
