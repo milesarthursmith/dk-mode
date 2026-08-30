@@ -6,6 +6,42 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-30 — SWE-bench pilot: the failures finally match the mechanism
+
+Pilot of the real-repo instrument: 6 SWE-bench Verified instances
+human-rated "<15 min fix" (django/sphinx), real Claude Code, Flash-Lite
+behind the bridge, official swebench scorer, official Docker Hub images
+(the Epoch registry rejects anonymous pulls; the Hub images are ~2.5GB
+each, which capped the pilot at 6 of the planned 20 when the disk
+allowance ran out).
+
+Score: **1/6 (0.167)** - below the 0.4-0.8 target band. But the score is
+not the finding. The finding is the failure profile:
+
+    django-16145   1 turn, 0 tool calls - narrated the task, did nothing
+    django-13297   2 turns - "the agent has applied the fix" after one
+                   tool call, no verification, no fix landed
+    django-16255   hallucinated a site-packages path, then asked the
+                   nonexistent user for help
+    sphinx-8721    9 turns, "committed the fix" - tests fail
+    django-14373   PASSED in 14 turns of genuine navigate-edit-verify
+    sphinx-9711    ran out of messages mid-exploration
+
+On LCB, residual failures were algorithmic - no steering can supply an
+algorithm. Here, five of five failures are PROCEDURAL: premature
+surrender, unverified done-claims, phantom paths, asking a user that does
+not exist. This is the first instrument where the dominant failure mode
+is the thing dk-mode claims to fix. Whether it actually fixes them is
+now, finally, a fair question.
+
+Also learned: the task's default message_limit=30 binds (two samples hit
+it; one passed anyway) - raise to ~100 for the real run. Cost measured at
+~$0.01/sample at these lengths (~$0.07 total); a full 3-arm x 20-task x
+2-epoch comparison projects to $12-36 with a raised limit. Blocker for
+scale: disk - either the Epoch 5GB image set (needs a GitHub token for
+ghcr) or a fresh session.
+
+
 ## 2026-08-29 — the real-hooks comparison: another null, and this one counts
 
 The first valid comparison of the programme. Real Claude Code, the shipped
