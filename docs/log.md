@@ -6,6 +6,47 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-30 — the three-arm SWE run: first directional separation, not yet a result
+
+The comparison the whole programme has been building toward: bare / dk /
+challenge on 20 SWE-bench Verified "<15 min" instances x 2 epochs, real
+Claude Code, attempts=3 in every arm, official scorer, network-isolated
+containers with a monitor-only egress relay. All arms 40/40, zero errors.
+Injection audit (probe messages excluded): the dk arm carried 44 static,
+38 tripwire and 5 live monitor injections - the model layer spoke, but
+thinly.
+
+    arm         mean   pass^2   pass@2
+    bare        0.15    1/20     5/20
+    challenge   0.20    0/20     8/20
+    dk          0.30    3/20     9/20
+
+    dk        vs bare       5-1  p=0.22
+    challenge vs bare       5-3  p=0.73
+    dk        vs challenge  4-2  p=0.69
+
+dk DOUBLED the bare mean and won the task-level pairing 5-1 - the first
+directional separation any instrument has produced. It is not yet a
+result: p=0.22 on six informative tasks, and the dk-challenge gap (0.30
+vs 0.20) is well inside noise. Two rival readings survive:
+
+  1. The monitor's selection is doing real work (dk > challenge > bare
+     is the ordering its mechanism predicts).
+  2. Any injection helps on this instrument and dk's edge over challenge
+     is luck. 5 live blocks in 40 samples is thin attribution for a
+     model-based layer; the static note + tripwire (deterministic, free)
+     may carry most of dk's gain.
+
+Also real: bare at attempts=3 scored exactly the single-attempt pilot's
+0.15 - blind "incorrect, try again" re-prompting rescued nothing, so
+whatever moved dk and challenge, it was not mere retry structure.
+
+Deciding between the readings needs power: ~60+ instances or more epochs
+(the easy slice has ~190 candidates; disk is the binding constraint at
+~600MB marginal per image). Cost of this run: ~$8 (~34 min/arm wall
+clock). Balance $22 after the user's top-up.
+
+
 ## 2026-08-30 — full pilot n=20: the failure is turn-1 surrender, and it's cheap to test
 
 Epoch ghcr images (authenticated; ~12GB for all 20 via shared layers vs
