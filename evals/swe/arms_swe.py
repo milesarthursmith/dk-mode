@@ -81,8 +81,11 @@ def setup(hooks: bool):
     /testbed because inspect_swe seeds the home directory itself."""
     plugin_files = {}
     if hooks:
-        for root, _, files in os.walk(PLUGIN):
+        for root, dirs, files in os.walk(PLUGIN):
+            dirs[:] = [d for d in dirs if d != "__pycache__"]
             for f in files:
+                if f.endswith((".pyc", ".pyo")):
+                    continue
                 p = os.path.join(root, f)
                 plugin_files[os.path.relpath(p, PLUGIN)] = open(p).read()
         ca = open(CA_LOCAL).read()
