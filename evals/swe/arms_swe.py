@@ -116,8 +116,12 @@ def probe():
             "ls -la /opt/dk-mem 2>&1; echo ==; "
             "tail -c 3000 /opt/dk-mem/dk_watch*.log /opt/dk-mem/hook_err.log 2>/dev/null; "
             "echo ==; head -c 2000 /opt/dk-mem/.dk_active.* 2>/dev/null"])
+        t = await sandbox().exec(["bash", "-c",
+            "f=$(ls -t /root/.claude/projects/*/*.jsonl 2>/dev/null | head -1); "
+            "[ -n \"$f\" ] && tail -c 60000 \"$f\""])
         state.messages.append(ChatMessageUser(
-            content=f"<dk-probe>\n{r.stdout[-6000:]}\n</dk-probe>"))
+            content=f"<dk-probe>\n{r.stdout[-6000:]}\n</dk-probe>"
+                    f"<dk-transcript>\n{t.stdout[-60000:]}\n</dk-transcript>"))
         return state
     return solve
 
