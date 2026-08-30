@@ -6,6 +6,45 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-30 — trace analysis: why the monitor ties the dumb nudge
+
+Read every live monitor injection (15 across both runs) in context, plus
+per-arm behavioral stats. Three findings, one story.
+
+**1. The monitor is accurate and obeyed - and it does not matter.** All
+15 live injections correctly named a real pathology (empty-message
+stalls, skipped verification, edit-retry loops); none hallucinated. 12/15
+were followed by renewed tool use. Yet 13/15 injected samples still
+scored 0. The monitor fires on the struggling samples by design, and
+what it re-engages is an agent that then fails the same mechanical step
+again.
+
+**2. The binding constraint is mechanical, not metacognitive.** ~25-30%
+of samples in EVERY arm hit an edit-precision loop (2+ failed Edit calls
+- Flash-Lite cannot reproduce old_string exactly), and those samples
+pass at ~15-20% vs ~35-40% for clean samples. No injection touches this;
+it is the capability wall, identical across arms.
+
+**3. The one fixable failure is stalling, and cadence beats diagnosis.**
+Empty-response stalls are the agent's dominant steerable failure (bare
+run2: stalled samples pass 1/9 vs 16/49). The challenge arm's fixed text
+every 3rd generation PREVENTED stalls almost entirely (0 stalled samples
+in run2, 1 in run1); dk's monitor only REPAIRS them after they happen
+(4 stalled samples both runs - it fires "you provided an empty response"
+after the stall). Prevention and repair cash out the same in score, so
+the arms tie - and neither needs a model to do it.
+
+So the null is not "injection does nothing": it is that the monitor's
+per-turn intelligence is spent diagnosing failures that are either
+unfixable (edit precision) or fixable by a dumb heartbeat (stalls). A
+model that could not stall, or a scaffold that retried edits with
+fuzzier matching, would erase the entire injection effect.
+
+Engagement stats agree: zero-tool surrender counts per arm flip between
+runs (dk 6->2 while challenge 6->5 in run1; challenge 6->2 while dk
+7 in run2) - neither arm reliably prevents surrender, noise dominates.
+
+
 ## 2026-08-30 — the replication: dk's edge over the scheduled control was noise
 
 Same three arms on 29 fresh "<15 min" instances x 2 epochs (disk capped
