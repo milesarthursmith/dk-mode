@@ -61,3 +61,6 @@ SWE-style scaffold (bash, python, file editor) with ten submissions.
 | 2026-08-30 | swe-verified-easy | hooked/realCC | 3arm/2ep | 20 | gemini-2.5-flash-lite | bare | 0.15 | - | attempts=3, same as 1-attempt pilot |
 | 2026-08-30 | swe-verified-easy | hooked/realCC | 3arm/2ep | 20 | gemini-2.5-flash-lite | challenge | 0.20 | p=0.73 vs bare | fixed text every 3rd gen |
 | 2026-08-30 | swe-verified-easy | hooked/realCC | 3arm/2ep | 20 | gemini-2.5-flash-lite | dk | 0.30 | p=0.22 vs bare, 5-1 | 44 static, 38 tripwire, 5 live |
+| 2026-08-30 | swe-verified-easy-2 | hooked/realCC | 3arm/2ep | 29 | gemini-2.5-flash-lite | bare | 0.29 | - | fresh instances, wider repo mix |
+| 2026-08-30 | swe-verified-easy-2 | hooked/realCC | 3arm/2ep | 29 | gemini-2.5-flash-lite | challenge | 0.36 | - | at dk level |
+| 2026-08-30 | swe-verified-easy-2 | hooked/realCC | 3arm/2ep | 29 | gemini-2.5-flash-lite | dk | 0.35 | 8-7 vs challenge pooled, p=1.0 | 60 static, 40 tripwire, 10 live |

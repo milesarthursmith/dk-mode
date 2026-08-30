@@ -6,6 +6,44 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-30 — the replication: dk's edge over the scheduled control was noise
+
+Same three arms on 29 fresh "<15 min" instances x 2 epochs (disk capped
+the planned 60; seeded selection, no overlap with the first set, wider
+repo mix - sympy, matplotlib, scikit-learn, astropy alongside django).
+All arms 58/58 clean. Injection audit: dk carried 60 static, 40
+tripwire, 10 live monitor injections - live and verified, again thin.
+
+    arm         run1 (20 tasks)   run2 (29 tasks)   pooled mean (49)
+    bare             0.15              0.29              0.235
+    challenge        0.20              0.36              0.296
+    dk               0.30              0.35              0.327
+
+    pooled per-task pairing:
+    dk        vs bare       12-6   p=0.24
+    challenge vs bare       11-8   p=0.65
+    dk        vs challenge   8-7   p=1.00
+    any-injection vs bare   15-8   p=0.21
+
+On the fresh set the challenge arm (fixed text every 3rd generation, no
+model, no selection) came in AT dk's level - slightly above it. Run 1's
+dk-over-challenge gap does not replicate; pooled, the comparison is a
+dead null (8-7). The easier fresh set also compressed the headroom
+story: bare surrendered less (0.29 vs 0.15), and the injection arms
+gained less over it.
+
+The programme's picture is now consistent across three instruments
+(maths band, LCB, SWE-bench): SOME mid-task injection appears mildly
+helpful on long-horizon tasks (any-injection vs bare 15-8, p=0.21,
++0.08 mean - directional, never significant), but the per-turn model
+call that selects WHAT to inject - dk-mode's central mechanism - has
+never once separated from a dumb scheduled nudge. The honest product
+conclusion: the value, if any, lives in the deterministic layer (static
+note + tripwire, which cost nothing), not in the monitor.
+
+Cost: run 2 ~$9; balance $12.55. Total programme spend on SWE: ~$18.
+
+
 ## 2026-08-30 — the three-arm SWE run: first directional separation, not yet a result
 
 The comparison the whole programme has been building toward: bare / dk /
