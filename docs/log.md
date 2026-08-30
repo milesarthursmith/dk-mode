@@ -41,7 +41,7 @@ never once separated from a dumb scheduled nudge. The honest product
 conclusion: the value, if any, lives in the deterministic layer (static
 note + tripwire, which cost nothing), not in the monitor.
 
-Cost: run 2 ~$9; balance $12.55. Total programme spend on SWE: ~$18.
+Cost: run 2 ~$4; balance $17.20. Total programme spend on SWE: ~$13.
 
 
 ## 2026-08-30 — the three-arm SWE run: first directional separation, not yet a result
