@@ -58,16 +58,17 @@ DK_ENV = (
     " SSL_CERT_FILE=/opt/dk-ca.crt"
     " CURL_CA_BUNDLE=/opt/dk-ca.crt"
     " REQUESTS_CA_BUNDLE=/opt/dk-ca.crt"
+    " DK_LOG_DIR=/opt/dk-mem"
 )
 
 HOOKS_JSON = """{{
   "hooks": {{
     "UserPromptSubmit": [{{"hooks": [{{"type": "command",
-      "command": "{env} bash /opt/dk-mode/scripts/dk_recall.sh"}}]}}],
+      "command": "{env} bash /opt/dk-mode/scripts/dk_recall.sh 2>>/opt/dk-mem/hook_err.log"}}]}}],
     "PostToolUse": [{{"hooks": [{{"type": "command",
-      "command": "{env} python3 /opt/dk-mode/scripts/dk_tripwire.py"}}]}}],
+      "command": "{env} python3 /opt/dk-mode/scripts/dk_tripwire.py 2>>/opt/dk-mem/hook_err.log"}}]}}],
     "Stop": [{{"hooks": [{{"type": "command",
-      "command": "{env} bash /opt/dk-mode/scripts/dk_capture.sh"}}]}}]
+      "command": "{env} bash /opt/dk-mode/scripts/dk_capture.sh 2>>/opt/dk-mem/hook_err.log"}}]}}]
   }}
 }}"""
 
@@ -105,6 +106,21 @@ def setup(hooks: bool):
     return solve
 
 
+@solver
+def probe():
+    """Post-agent: pull the dk memory dir's state into the transcript so a
+    silent monitor is diagnosable after the container is gone."""
+    async def solve(state, generate):
+        r = await sandbox().exec(["bash", "-c",
+            "ls -la /opt/dk-mem 2>&1; echo ==; "
+            "tail -c 3000 /opt/dk-mem/dk_watch*.log /opt/dk-mem/hook_err.log 2>/dev/null; "
+            "echo ==; head -c 2000 /opt/dk-mem/.dk_active.* 2>/dev/null"])
+        state.messages.append(ChatMessageUser(
+            content=f"<dk-probe>\n{r.stdout[-6000:]}\n</dk-probe>"))
+        return state
+    return solve
+
+
 def _challenge_filter(every: int):
     with open(os.path.join(REPO, "evals", "impossiblebench",
                            "challenge.md"), encoding="utf-8") as f:
@@ -123,6 +139,7 @@ def _challenge_filter(every: int):
 
 def make_task(name, hooks, challenge_every=0):
     t = swe_bench()               # default template = Epoch ghcr images
+    t._name = f"swe_{name}"       # Task.name property reads self._name
     t.dataset = MemoryDataset([s for s in t.dataset if str(s.id) in IDS])
     assert len(t.dataset) == len(IDS)
     agent = claude_code(
@@ -132,8 +149,8 @@ def make_task(name, hooks, challenge_every=0):
         disallowed_tools=["WebSearch", "WebFetch"],
         filter=_challenge_filter(challenge_every) if challenge_every else None,
     )
-    t.name = f"swe_{name}"
-    t.solver = chain(setup(hooks), agent)
+    t.solver = chain(setup(hooks), agent, probe()) if hooks \
+        else chain(setup(hooks), agent)
     return t
 
 
