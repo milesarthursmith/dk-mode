@@ -6,6 +6,42 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-30 — sample reads: one true win, one muting bug, and the horizon question
+
+Read matched transcripts where arms disagreed. Two exemplars:
+
+**sphinx-9711 (bare 0, challenge 0, dk 1.0):** the one clean monitor win
+on record. The agent delegated to an Explore subagent and stopped to
+wait; the monitor injected "you handed off the task and are now waiting
+- you should be doing the work yourself"; the agent took the work back,
+found the file, made the edit, passed. Exactly the designed mechanism.
+
+**django-12193 ep1 (bare 1.0, dk 0.0):** the worst loss exposes a design
+flaw. The agent stalled with "No response requested." x3, zero tools.
+The probe shows .dk_active at 0 bytes: the monitor watched the stall and
+selected NOTHING - and by design ("a fresh but EMPTY selection is a real
+answer: inject nothing") the empty verdict SUPPRESSED the static note
+too. dk delivered less nudging than the static layer alone would have.
+The monitor can actively mute its own deterministic safety net. That is
+a fixable product bug: an empty selection should fall through to the
+static note, not replace it.
+
+**Task-length split (bare-arm turns as proxy):** the injection benefit
+concentrates on the SHORT half (dk-bare +0.15, chal-bare +0.15 at ~7
+bare turns) and vanishes on the long half (+0.04 / -0.02 at ~19). This
+is rescue-of-early-stalls, not prevention of compounding drift - but
+note the reverse causality: tasks where bare stalls are short BECAUSE
+it stalls.
+
+**The horizon hypothesis stands untested.** Median session: 12 assistant
+turns, 2.7 min wall clock; max 36 turns / 31 min. Every instrument in
+this programme tops out at tens of turns. The regime where the monitor's
+thesis lives - hours-long sessions, 100+ turns, where loops and drift
+compound past what any fixed-cadence nudge tracks - has never been
+measured, and Flash-Lite cannot reach it (it stalls long before). Testing
+it needs a stronger agent on the 1-4h SWE slice or repo-scale tasks.
+
+
 ## 2026-08-30 — trace analysis: why the monitor ties the dumb nudge
 
 Read every live monitor injection (15 across both runs) in context, plus
