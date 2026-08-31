@@ -6,6 +6,61 @@ there and what was actually tested.
 
 ---
 
+## 2026-08-31 — the goal-mode marathon: instrument works, monitor silent, money gone
+
+The instrument the horizon hypothesis called for (evals/goal): jinja2
+with 20 seeded bugs (785/842 tests failing), one standing goal, a
+continue-driver re-prompting the agent after every stop with the honest
+fraction fixed, gemini-2.5-flash as agent, 250-message cap, ~100-122
+turns per session. Two smokes burned first: a scorer that selected tests
+by id fed the agent "0% fixed" for a whole 151-turn session (parametrized
+ids contain spaces; awk truncated them; one malformed selector makes
+pytest collect nothing) - replaced with a whole-suite delta score; and
+flash-lite disqualified itself by wrecking lexer.py with an
+IndentationError and fighting its own damage for 88 turns.
+
+The run (2 epochs/arm planned; challenge cut to 1 by budget, then lost
+entirely - OpenRouter hit $0 mid-session and the sample errored):
+
+    bare       {1.000, 0.406}   mean 0.703
+    dk         {0.000, 0.623}   mean 0.311
+    challenge  no data
+
+Three readings, in order of durability:
+
+1. **The instrument is validated.** Scores span the full 0-1 range; bare
+   ep1 fixed ALL 20 bugs in 60 unaided turns; the continuous gradient
+   moves; sessions sustain 122 turns. This is the long-horizon testbed
+   the programme lacked, reusable for ~$2/session.
+
+2. **Arm means at n=2 are noise.** Within-arm spread (bare 1.00 vs 0.41,
+   dk 0.00 vs 0.62) dwarfs the between-arm gap. dk's 0.311 is not
+   evidence of harm; it is two coin flips.
+
+3. **The live layer was SILENT for both dk marathons.** Static and
+   tripwire fired normally (3-6 each per epoch), live: zero, across ~30
+   stops and 244 turns - including dk ep2 sitting at 0% for SIX
+   consecutive scored attempts before its breakthrough, the exact
+   "stuck; change approach" arc the monitor exists to catch. (The
+   shorter smoke produced 2 live in ~15 stops, so the pipeline can
+   fire in this topology; both marathon epochs hit the message cap, so
+   the post-agent probe never ran and the watch log is unrecoverable.)
+
+The pattern across every instrument now has a sharper shape: the
+monitor's live layer is accurate but reactive and RARE - it speaks
+mostly to empty-message stalls, and almost never to the slow arc
+failures it was designed for. Where the failure is a stall, a dumb
+cadence prevents what the monitor only repairs; where the failure is a
+long wedge, the monitor stays quiet.
+
+Open items, needing ~$10-15: the challenge marathon arm (0 epochs ran),
+2 more epochs per arm for any separation claim, and the question the
+live-silence raises - whether dk_watch's selection prompt is tuned so
+hard against false positives that it cannot fire on arc failures at all.
+
+Balance: $0.75. Marathon spend: ~$12.
+
+
 ## 2026-08-30 — sample reads: one true win, one muting bug, and the horizon question
 
 Read matched transcripts where arms disagreed. Two exemplars:

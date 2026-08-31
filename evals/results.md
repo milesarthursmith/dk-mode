@@ -64,3 +64,6 @@ SWE-style scaffold (bash, python, file editor) with ten submissions.
 | 2026-08-30 | swe-verified-easy-2 | hooked/realCC | 3arm/2ep | 29 | gemini-2.5-flash-lite | bare | 0.29 | - | fresh instances, wider repo mix |
 | 2026-08-30 | swe-verified-easy-2 | hooked/realCC | 3arm/2ep | 29 | gemini-2.5-flash-lite | challenge | 0.36 | - | at dk level |
 | 2026-08-30 | swe-verified-easy-2 | hooked/realCC | 3arm/2ep | 29 | gemini-2.5-flash-lite | dk | 0.35 | 8-7 vs challenge pooled, p=1.0 | 60 static, 40 tripwire, 10 live |
+| 2026-08-31 | goal-jinja-20bugs | goal/realCC | 2ep | 1 | gemini-2.5-flash | bare | 0.703 | {1.00,0.41} | marathon, 60-108 turns |
+| 2026-08-31 | goal-jinja-20bugs | goal/realCC | 2ep | 1 | gemini-2.5-flash | dk | 0.311 | {0.00,0.62} | 0 live injections in 244 turns |
+| 2026-08-31 | goal-jinja-20bugs | goal/realCC | - | 1 | gemini-2.5-flash | challenge | n/a | - | lost to budget exhaustion |
