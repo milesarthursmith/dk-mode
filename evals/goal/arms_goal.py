@@ -111,24 +111,30 @@ def probe():
     return solve
 
 
+BASE_PASS = 57      # tests still green under all 20 bugs (842 - 785)
+
+
 @scorer(metrics=[mean(), stderr()])
 def fraction_fixed():
-    """Reset tests/ from the pristine snapshot, run the originally-failing
-    ids, score the fraction now passing. Test tampering scores nothing."""
-    ids = " ".join(f"'{t}'" for t in FAILING)
+    """Reset tests/ from the pristine snapshot, run the WHOLE suite, score
+    (passed - baseline) / originally-failing. Never selects by test id:
+    parametrized ids contain spaces and one malformed selector makes
+    pytest collect nothing - that bug zeroed the first smoke's feedback
+    loop for its entire 151-turn session. Test tampering scores nothing
+    (pristine reset), and breaking originally-green tests costs score."""
     async def score(state, target):
         try:
             r = await sandbox().exec(["bash", "-c",
                 "cd /opt/jinja && rm -rf tests && cp -r /opt/pristine_tests tests "
-                f"&& python -m pytest {ids} -q --no-header 2>&1 | tail -1"],
-                timeout=300)
+                "&& timeout 280 python -m pytest tests -q --no-header 2>&1 | tail -1"],
+                timeout=340)
             out = (r.stdout or "").strip().splitlines()[-1] if r.stdout else ""
         except Exception as e:
             return Score(value=0.0, explanation=f"{type(e).__name__}: {e}")
         import re as _re
         passed = sum(int(m.group(1)) for m in _re.finditer(r"(\d+) passed", out))
-        return Score(value=round(passed / len(FAILING), 4), answer=out,
-                     explanation=out)
+        frac = max(0.0, (passed - BASE_PASS) / len(FAILING))
+        return Score(value=round(frac, 4), answer=out, explanation=out)
     return score
 
 
