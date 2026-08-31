@@ -32,9 +32,13 @@ MUTS = [
 ]
 
 
-def sh(cmd, timeout=300):
-    return subprocess.run(["docker", "run", "--rm", IMG, "bash", "-c", cmd],
-                          capture_output=True, text=True, timeout=timeout)
+def sh(cmd, timeout=180):
+    try:
+        return subprocess.run(["docker", "run", "--rm", IMG, "bash", "-c", cmd],
+                              capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        # a mutation that makes a test HANG is a bad seed - caller skips it
+        return None
 
 
 def listing():
@@ -71,7 +75,8 @@ def main():
                f"p={path!r}; L=open(p).readlines()\n"
                f"L[{no}-1]=re.sub({pat!r},{rep!r},L[{no}-1],count=1)\n"
                f"open(p,'w').writelines(L)\nEOF\n")
-        r = sh(mut + "cd /opt/jinja && python -m pytest tests -q -x --no-header 2>&1 | tail -2")
+        r = sh(mut + "cd /opt/jinja && timeout 90 python -m pytest tests -q -x --no-header 2>&1 | tail -2")
+        if r is None: continue
         out = r.stdout
         if "error" in out.lower() and "collect" in out.lower(): continue
         if re.search(r"\b\d+ failed", out):
@@ -85,8 +90,9 @@ def main():
         f"L[{n}-1]=re.sub({pa!r},{re_!r},L[{n}-1],count=1)\nopen(p,'w').writelines(L)\nEOF"
         for p, n, pa, re_ in kept)
     r = sh(muts + "\ncd /opt/jinja && git diff; echo ===SPLIT===; "
-                  "python -m pytest tests -q --no-header 2>&1 | grep FAILED | awk '{print $2}'",
+                  "timeout 300 python -m pytest tests -q --no-header 2>&1 | grep FAILED | awk '{print $2}'",
            timeout=600)
+    assert r is not None, "combined suite hung - a kept mutation deadlocks"
     diff, _, failing = r.stdout.partition("===SPLIT===")
     failing = [l.strip() for l in failing.splitlines() if "::" in l]
     open(f"{HERE}/bugs.patch", "w").write(diff.strip() + "\n")
