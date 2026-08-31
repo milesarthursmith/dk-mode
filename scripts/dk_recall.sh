@@ -84,10 +84,15 @@ injected=no
 if [ -r "$ACTIVE" ]; then
   amt=$(mtime "$ACTIVE")
   if [ "$amt" -gt 0 ] && [ $(( $(date +%s) - amt )) -lt "$TTL" ]; then
-    # A fresh but EMPTY selection is a real answer: nothing is live, inject
-    # nothing. Only an absent/stale file falls through to the static note.
-    [ -s "$ACTIVE" ] && cat "$ACTIVE"
-    injected=yes
+    # A fresh but EMPTY selection means nothing is LIVE - but it must not
+    # mute the static note. On swe run 2 (django-12193) the agent stalled
+    # three turns running while the monitor's empty verdict suppressed
+    # every nudge; dk delivered less than the static layer alone. Empty
+    # falls through; only a non-empty selection replaces the note.
+    if [ -s "$ACTIVE" ]; then
+      cat "$ACTIVE"
+      injected=yes
+    fi
   fi
 fi
 if [ "$injected" = "no" ] && [ -r "$RULES" ]; then

@@ -24,3 +24,4 @@ evals/swe/logs/
 # The hooked sandbox stages a copy of the plugin at build time.
 evals/hooked/plugin/
 evals/swe/pulled60.txt
+evals/goal/ca-bundle.crt

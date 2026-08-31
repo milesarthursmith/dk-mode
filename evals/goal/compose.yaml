@@ -1,0 +1,22 @@
+# Goal-mode sandbox: jinja2 with seeded bugs, agent network-dead, monitor
+# egress through the relay only (same topology the swe arms validated).
+services:
+  default:
+    image: dk-goal
+    command: sleep infinity
+    working_dir: /opt/jinja
+    networks: [inner]
+    mem_limit: 2gb
+  relay:
+    image: python:3.11-slim
+    command: python /relay.py
+    volumes:
+      - /home/user/dk-mode/evals/swe/relay.py:/relay.py:ro
+      - /root/.ccr/ca-bundle.crt:/etc/ssl/certs/policy-ca.pem:ro
+    environment:
+      SSL_CERT_FILE: /etc/ssl/certs/policy-ca.pem
+    networks: [inner, egress]
+networks:
+  inner:
+    internal: true
+  egress: {}
