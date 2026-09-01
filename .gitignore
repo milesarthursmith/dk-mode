@@ -25,3 +25,5 @@ evals/swe/logs/
 evals/hooked/plugin/
 evals/swe/pulled60.txt
 evals/goal/ca-bundle.crt
+evals/bench/results.jsonl
+evals/bench/.mem/
