@@ -710,11 +710,21 @@ def parse_selection(text, rules):
     if not m:
         return None
     try:
-        data = json.loads(m.group(0))
+        # strict=False: models sometimes leave raw newlines inside the brief
+        # string; dropping the whole verdict for that is indistinguishable
+        # from monitor silence (found 2026-09-01, marathon wedge replay).
+        data = json.loads(m.group(0), strict=False)
     except ValueError:
         return None
     valid = {r["id"] for r in rules}
-    active = [i for i in data.get("active", []) if isinstance(i, int) and i in valid]
+    def _as_id(i):
+        try:
+            return int(i)
+        except (TypeError, ValueError):
+            return None
+    # ids arrive as ints or numeric strings depending on model mood
+    active = [j for j in (_as_id(i) for i in data.get("active", []))
+              if j is not None and j in valid]
     alert = data.get("alert")
     if not isinstance(alert, str) or not alert.strip():
         alert = None

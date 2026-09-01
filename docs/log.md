@@ -6,6 +6,55 @@ there and what was actually tested.
 
 ---
 
+## 2026-09-01 — the user was right: the evals ran a stale build, and the current one catches the wedge
+
+Pressed on "something is wrong with the design or the eval set", three
+instrument-failure hypotheses were tested offline against the marathon's
+wedge session (six scored attempts at 0%), for about a cent total:
+
+1. Transcript scale / watch crash: NO. dk_watch runs the full marathon
+   transcript in 4s, API call succeeds, still selects nothing.
+2. The eval plugin's selection rule: CONFIRMED AS THE FLAW. The shipped
+   eval copy instructs: "If the evidence is anything other than the last
+   assistant message itself, return an empty active list. The correct
+   answer is usually an empty list." A wedge is never visible in one
+   message - the agent narrates every failure as one turn from a fix
+   ("I will correct this immediately"). The raw verdict on the wedge
+   shows the model SEEING everything (its brief: "TRIED: ... failed ...
+   reverted"; 8 mined self-corrections) and returning active=[] because
+   the rule forbids acting on arc evidence. One prompt edit permitting
+   arc evidence -> it fires immediately with the correct alert.
+3. Parser brittleness: SECOND LATENT FLAW. The fired verdict was then
+   DISCARDED - string ids ("14" vs 14) and raw newlines in the JSON fail
+   the strict parser, indistinguishable from silence. Fixed: strict=False
+   + id coercion, both copies.
+
+Then the twist that reframes the whole programme: scripts/dk_watch.py
+(the CURRENT product code) had already replaced the last-message rule -
+its criteria read "walking a circle the digest lines show ... drifted off
+the GOAL", backed by a tiered 100-message digest window built exactly for
+loop-spotting, 26k window vs the eval copy's 9k. evals/hooked/plugin/ was
+a stale snapshot. EVERY dk arm ever run - LCB, both SWE runs, the
+marathon - evaluated the old build.
+
+Replayed unmodified on the wedge, the current build fires: correct loop
+diagnosis, live alert written to the active file ("You are repeating the
+same error of old_string mismatch - re-read the file before modifying").
+
+Standing corrections to previous conclusions:
+- All dk-vs-challenge nulls and the marathon live-silence apply to the
+  STALE build only. The current build has never been evaluated.
+- The "monitor is constitutionally reactive" reading was true of the old
+  prompt and is already fixed in the product.
+- What remains true build-independent: the deterministic layer + cadence
+  effects, the edit-precision capability wall, and the instrument designs.
+
+The plugin snapshot is now synced to the current build (single file
+divergence: dk_watch.py), parser hardened in both. Next fundable step:
+rerun the marathon three-arm with the synced build (~$12) - the first
+eval of dk-mode as it actually ships.
+
+
 ## 2026-08-31 — the goal-mode marathon: instrument works, monitor silent, money gone
 
 The instrument the horizon hypothesis called for (evals/goal): jinja2
