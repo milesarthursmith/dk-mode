@@ -6,6 +6,37 @@ there and what was actually tested.
 
 ---
 
+## 2026-09-01 — replay bench first sweep: the bench corrects the morning's story
+
+Three dk_watch variants over 18 frozen moments (10 wedges, 8 healthy)
+from the marathon logs, ~$0.10 per variant:
+
+    variant     wedge recall   healthy false-fires
+    arc-patch       5/10             0/8
+    stale           4/10             2/8
+    current         2/10             3/8
+
+Two corrections and one result:
+
+- The morning's "stale build was the problem, current build catches the
+  wedge" story was built on n=1 moment and is WRONG at n=10: the current
+  build is the worst variant on both axes. Wedge-blindness is real and
+  build-independent.
+- Neither shipped prompt clears 40% recall. The selection layer, however
+  worded, misses most wedges when asked to judge them.
+- The arc-patch prompt (evidence may come from the brief's TRIED list or
+  recurring failures; "a note costs one line; a missed wedge costs the
+  session") is the best variant on BOTH axes - recall up, false fires to
+  zero. One sentence, found and validated for ~$0.30 total, where each
+  marathon A/B costs ~$12 and answers less.
+
+Still missing half the wedges though - consistent with the emerging
+design conclusion that the TRIGGER should be a deterministic counter
+(driver-reported score flat across N attempts; same-target edit failures)
+with the model composing only the alert text. That variant needs a small
+dk_watch code change, not just prompt text; next on the bench.
+
+
 ## 2026-09-01 — the user was right: the evals ran a stale build, and the current one catches the wedge
 
 Pressed on "something is wrong with the design or the eval set", three
