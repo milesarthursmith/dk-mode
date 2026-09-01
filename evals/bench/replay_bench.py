@@ -14,7 +14,14 @@ truth), replay any dk_watch variant over them, score fire-rates.
 Usage:
   python3 replay_bench.py extract          # build moments/ from eval logs
   python3 replay_bench.py run NAME WATCH_PY [env K=V ...]
+  python3 replay_bench.py run-seq NAME WATCH_PY [env K=V ...]
   python3 replay_bench.py report
+
+run-seq is for STATEFUL watchers (docs/SHAPE.md): the moment's prefix is
+replayed chunk by chunk (split at driver-continue boundaries) into one
+persistent memory dir, so the watcher accumulates notes/expectations
+across looks exactly as it would live. Scored on the verdict after the
+final chunk; first-fire chunk recorded.
 
 A variant = a dk_watch.py file + env overrides, so prompt edits, window
 sizes, monitor models and thresholds all sweep the same way. Results
@@ -69,6 +76,49 @@ def extract():
                     out.write("\n".join(json.dumps(m) for m in msgs[:idx]))
                 n += 1
     print(f"extracted {n} moments -> {MOMENTS}/")
+
+
+def _chunks(mf):
+    """Split a moment at driver-continue messages -> growing prefixes."""
+    lines = open(mf).read().splitlines()
+    cuts = [i + 1 for i, l in enumerate(lines)
+            if "The goal stands" in l or "still failing" in l]
+    cuts = [c for c in cuts if c > 2] or [len(lines)]
+    if cuts[-1] != len(lines):
+        cuts.append(len(lines))
+    return [lines[:c] for c in cuts]
+
+
+def run_seq(name, watch_py, env_extra):
+    scratch = os.path.join(HERE, ".mem")
+    results = open(RESULTS, "a")
+    for mf in sorted(glob.glob(os.path.join(MOMENTS, "*.jsonl"))):
+        moment = os.path.basename(mf)[:-6]
+        subprocess.run(["rm", "-rf", scratch]); os.makedirs(scratch)
+        env = dict(os.environ, DK_MEM=scratch, DK_SESSION="bench",
+                   DK_API_KEY=os.environ["OPENROUTER_API_KEY"],
+                   DK_WATCH_MODELS=os.environ.get("BENCH_MONITOR",
+                                                  "google/gemini-2.5-flash"),
+                   **env_extra)
+        tp = os.path.join(scratch, "t.jsonl")
+        first_fire, fired = None, False
+        t0 = time.time()
+        for ci, chunk in enumerate(_chunks(mf)):
+            open(tp, "w").write("\n".join(chunk))
+            subprocess.run([sys.executable, watch_py, tp], env=env,
+                           capture_output=True, timeout=180)
+            a = os.path.join(scratch, ".dk_active.bench")
+            fired = os.path.exists(a) and os.path.getsize(a) > 0
+            if fired and first_fire is None:
+                first_fire = ci
+        text = open(a).read().strip() if fired else ""
+        rec = {"variant": name, "moment": moment,
+               "label": moment.split("_")[0], "fired": fired,
+               "first_fire_chunk": first_fire, "alert": text[:400],
+               "secs": round(time.time() - t0, 1)}
+        results.write(json.dumps(rec) + "\n")
+        print(f"{name} {moment}: {'FIRED@' + str(first_fire) if fired else 'quiet'} ({rec['secs']:.0f}s)")
+    results.close()
 
 
 def run(name, watch_py, env_extra):
@@ -126,5 +176,8 @@ if __name__ == "__main__":
     elif cmd == "run":
         env_extra = dict(kv.split("=", 1) for kv in sys.argv[4:])
         run(sys.argv[2], sys.argv[3], env_extra)
+    elif cmd == "run-seq":
+        env_extra = dict(kv.split("=", 1) for kv in sys.argv[4:])
+        run_seq(sys.argv[2], sys.argv[3], env_extra)
     else:
         report()

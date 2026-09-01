@@ -41,41 +41,23 @@ read raw recent events (and opencode has a filed bug: cross-window
 repetition evades them). dk-mode's brief is exactly the artifact that
 fixes that - it just was never wired to the trigger.
 
-## The v2 architecture
+## The v2 architecture — superseded, see docs/SHAPE.md
 
-1. **Deterministic triggers (Tier A), running on every event.**
-   Extend dk_tripwire with: identical tool+args counters (3 -> nudge,
-   5 -> escalate; cycle lengths 1-5 to catch ping-pong), error streaks
-   (3), no-state-change windows (no file mtime delta / driver score flat
-   across N attempts), and cross-window repetition read from the brief's
-   attempt ledger. Thresholds are the field's convergent numbers.
+The architecture originally drafted here (deterministic triggers gating
+a model that only composes messages) is RETIRED as a product direction.
+The decided shape (docs/SHAPE.md, 2026-09-01, non-negotiable) is a
+stateful LLM watcher: one continuous monitor conversation per session,
+judgement deciding when to speak, deterministic signals demoted to
+annotations on the evidence the watcher reads, expectation/credibility
+tracking against the agent's own claims. The counter-gated design
+survives only as a bench baseline the watcher must beat.
 
-2. **The brief becomes a structured attempt ledger (Tier B).**
-   Keep dk_watch's per-stop brief, but make it machine-readable:
-   ATTEMPTS (edit-target x count), test-status timeline, turn of last
-   state change. Written by the model as today; READ by Tier A. This is
-   the novel bit the research says nobody has shipped.
-
-3. **The model composes, never judges (Tier C).**
-   When Tier A fires, the LLM writes the alert and must include external
-   facts: the exact repeated hunk, the unchanged failing assertion, the
-   count of identical attempts. Naming the failing check recovered 45%
-   vs 16% for a blind kick (2608.02464). Free-form model judgment of
-   "is the agent stuck" is retired; if ever reinstated, Gemini CLI's
-   budgeting applies (sparse cadence, high confidence, double-check).
-
-4. **Escalation ladder, biased toward truncation over advice.**
-   Injected note -> suggest rollback/re-read -> Stop-block only on
-   repeated confirmation. For wedges prefer resample/rollback: advice
-   appended to a poisoned context reinforces anchoring (2607.26117);
-   rollback-and-retry lifted recovery 52%->73% (2608.02464).
-
-5. **Prevention beats monitoring where possible.**
-   Our edit-precision wall (25-30% of samples in every arm) is a
-   feedback-quality problem: SWE-agent's linter-in-the-edit-command was
-   worth +3 SWE-bench points by making the loop unenterable
-   (2405.15793). Out of dk-mode's scope but the single best-evidenced
-   fix for the failure class that dominated our traces.
+What carries over unchanged from the evidence: alerts must contain
+external facts (the exact repeated hunk, the unchanged failing
+assertion, attempt counts - 45% vs 16% recovery, arXiv:2608.02464);
+prevention beats monitoring for edit-precision loops (linter-in-edit,
++3 SWE-bench pts, arXiv:2405.15793); and per-frame stateless judging is
+dead for the reasons docs/log.md documents.
 
 ## The eval funnel (replaces one-shot A/Bs)
 
@@ -104,5 +86,6 @@ fixes that - it just was never wired to the trigger.
     stale           4/10          2/8     <- what all published arms ran
     current         2/10          3/8     <- what ships today
 
-No judgment-based prompt clears 50%. The deterministic-trigger variant
-(Tier A reading the ledger) is the next thing on the bench.
+No stateless prompt clears 50%. Next on the bench: the stateful
+watcher (docs/SHAPE.md; prototype evals/bench/watcher_session.py) via
+sequential replay, against these rows and a counter-gated baseline.
