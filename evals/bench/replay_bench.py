@@ -155,7 +155,7 @@ def _chunks(mf):
 
 
 def run_seq(name, watch_py, env_extra):
-    scratch = os.path.join(HERE, ".mem")
+    scratch = os.environ.get("BENCH_MEM", os.path.join(HERE, ".mem"))
     results = open(RESULTS, "a")
     for mf in _moment_files():
         moment = os.path.basename(mf)[:-6]
@@ -187,7 +187,7 @@ def run_seq(name, watch_py, env_extra):
 
 
 def run(name, watch_py, env_extra):
-    scratch = os.path.join(HERE, ".mem")
+    scratch = os.environ.get("BENCH_MEM", os.path.join(HERE, ".mem"))
     results = open(RESULTS, "a")
     files = _moment_files()
     fired = {}
