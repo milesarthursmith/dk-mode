@@ -39,7 +39,19 @@ import uuid
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 MOMENTS = os.path.join(HERE, "moments")
+# Corpora the run/run-seq modes sweep. moments/ = our own small-agent runs
+# (mechanical wedges); moments_tb/ = frontier-agent Terminal-Bench 2
+# trajectories mined by extract_tb.py (semantic wedges + hard negatives).
+MOMENT_DIRS = [d for d in os.environ.get(
+    "MOMENT_DIRS", f"{MOMENTS}:{os.path.join(HERE, 'moments_tb')}").split(":") if d]
 RESULTS = os.path.join(HERE, "results.jsonl")
+
+
+def _moment_files():
+    out = []
+    for d in MOMENT_DIRS:
+        out += sorted(glob.glob(os.path.join(d, "*.jsonl")))
+    return out
 
 
 def extract():
@@ -140,7 +152,7 @@ def _chunks(mf):
 def run_seq(name, watch_py, env_extra):
     scratch = os.path.join(HERE, ".mem")
     results = open(RESULTS, "a")
-    for mf in sorted(glob.glob(os.path.join(MOMENTS, "*.jsonl"))):
+    for mf in _moment_files():
         moment = os.path.basename(mf)[:-6]
         subprocess.run(["rm", "-rf", scratch]); os.makedirs(scratch)
         env = dict(os.environ, DK_MEM=scratch, DK_SESSION="bench",
@@ -172,7 +184,7 @@ def run_seq(name, watch_py, env_extra):
 def run(name, watch_py, env_extra):
     scratch = os.path.join(HERE, ".mem")
     results = open(RESULTS, "a")
-    files = sorted(glob.glob(os.path.join(MOMENTS, "*.jsonl")))
+    files = _moment_files()
     fired = {}
     for mf in files:
         moment = os.path.basename(mf)[:-6]

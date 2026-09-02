@@ -16,9 +16,13 @@ way a human overseer would. Decided, non-negotiable: docs/SHAPE.md.
   run-seq (stateful watchers), report (Wilson CIs + paired McNemar).
   Corpus: evals/bench/moments/ = 59 moments (43 wedge, 16 healthy) - but
   41/43 wedges are one mechanical failure (Edit old_string loops from
-  small Gemini agents). A semantic-wedge corpus from frontier-agent
-  Terminal-Bench trajectories is being mined into evals/bench/moments_tb/
-  by evals/bench/extract_tb.py (review before merging).
+  small Gemini agents). evals/bench/moments_tb/ = 104 moments (49 wedge,
+  55 hard-negative healthy) across 43 Terminal-Bench 2 tasks from
+  frontier agents (Opus 4.6/4.7, GLM-4.7), process-labeled by
+  evals/bench/extract_tb.py (rerun: `python3 extract_tb.py all`, ~60MB).
+  Wedges are semantic: wrong-region chasing, polling a broken run,
+  missing-dep loops, long no-progress stretches. The bench sweeps both
+  dirs (MOMENT_DIRS). Total corpus: 163 moments, 92 wedge / 71 healthy.
 - Instruments: evals/swe (SWE-bench easy slice, relay topology),
   evals/goal (jinja 20-bug marathon), evals/terminalbench/SCOPING.md
   (feasible via harbor --ak config; $18-22/trial Opus-class - do not run
@@ -44,8 +48,6 @@ paired A/B (goal-mode ~$10-25; Terminal-Bench $1-4k). Kill criterion at
 each stage. Total spent so far ~$40. Balance $0.66.
 
 ## Open threads
-- Corpus miner running (background agent). Deliverable: moments_tb/ +
-  extract_tb.py + report. Merge after reading a sample of moments.
 - Waiting on user: OpenRouter top-up (~$1.50 stage 1 / ~$10 through
   stage 2); EXA_API_KEY if the grounded watcher is to be benched.
 - Next runs, in order: run-seq watcher vs arc-patch vs a counter-gated

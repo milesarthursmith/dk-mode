@@ -6,6 +6,31 @@ there and what was actually tested.
 
 ---
 
+## 2026-09-02 — the semantic-wedge corpus, from frontier agents, for free
+
+The bench corpus was 41/43 wedges of one mechanical failure (small
+Gemini agents failing Edit old_string). Mined the public Terminal-Bench
+2 leaderboard dataset instead: 124 trials from five harnesses running
+Opus 4.6/4.7 and GLM-4.7 (native Claude Code JSONLs where available,
+ATIF trajectories otherwise), ~60MB of transcripts, zero model cost.
+Result: 104 moments across 43 tasks, 49 wedge / 55 hard-negative
+healthy, all process-labeled (repeat-command, repeat-error, no-progress
+window; verifier reward recorded for review only, never used to label).
+
+These are the wedges the watcher exists for. Examples: an Opus agent
+re-paging the same 200-line slice of an OCR dump five times while
+looking in the wrong region; polling a training run every turn with
+"~N minutes remaining" while the same TypeError kept firing; a
+115-message stretch editing a corewars warrior and re-running the same
+benchmark with scores churning and nothing structural changing; a build
+error naming a missing package recurring three times without the
+package ever being installed.
+
+Bench now sweeps both corpora: 163 moments, 92 wedge / 71 healthy.
+Stage 1 (watcher via run-seq vs arc-patch vs counter-gated baseline) is
+ready and costs roughly $2 for all three; blocked on balance ($0.66).
+
+
 ## 2026-09-01 — replay bench first sweep: the bench corrects the morning's story
 
 Three dk_watch variants over 18 frozen moments (10 wedges, 8 healthy)
