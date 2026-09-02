@@ -143,8 +143,13 @@ def _chunks(mf):
     lines = open(mf).read().splitlines()
     cuts = [i + 1 for i, l in enumerate(lines)
             if "The goal stands" in l or "still failing" in l]
-    cuts = [c for c in cuts if c > 2] or [len(lines)]
-    if cuts[-1] != len(lines):
+    cuts = [c for c in cuts if c > 2]
+    if not cuts:
+        # no driver markers (Terminal-Bench moments): look every N messages,
+        # so a stateful watcher still accumulates across the prefix
+        step = int(os.environ.get("SEQ_STEP", "10"))
+        cuts = list(range(step, len(lines), step))
+    if not cuts or cuts[-1] != len(lines):
         cuts.append(len(lines))
     return [lines[:c] for c in cuts]
 
