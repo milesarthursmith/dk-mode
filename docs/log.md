@@ -6,6 +6,18 @@ there and what was actually tested.
 
 ---
 
+## 2026-09-02 — v2 prompt variant blocked by the key limit
+
+watcher_v2 (settle expectations first; five named reasons to speak;
+silence otherwise) was run over the 104 semantic moments and came back
+0/49 - an artifact: 66 rows failed in under 5s with HTTP 403 "Key limit
+exceeded (total limit)". The OpenRouter KEY has a $100 lifetime cap and
+cumulative usage crossed it ($100.07); the account balance ($42) is
+untouched. v2 rows discarded; rerun once the key limit is raised or a
+new key issued. Lesson for the bench: treat sub-5s quiet rows as
+failures, never as silence (added to the resume/report path next).
+
+
 ## 2026-09-02 — cadence is not the lever
 
 watcher-dense (look every 5 messages, 6 exchanges kept) on the 104
