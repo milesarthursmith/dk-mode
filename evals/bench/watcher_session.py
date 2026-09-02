@@ -25,6 +25,11 @@ TIMEOUT = int(os.environ.get("DK_WATCH_TIMEOUT", "110"))
 # watcher context: system + goal + latest notes + last K raw exchanges
 KEEP_EXCHANGES = int(os.environ.get("DK_WATCHER_KEEP", "3"))
 PER_MSG = 1200
+# Grounded interventions (SHAPE.md #4): when the watcher decides to speak
+# and names a lookup, search and rewrite the alert around what was found.
+# OFF unless a key is present; keep it off on benchmarks with public fixes.
+EXA_KEY = os.environ.get("EXA_API_KEY", "")
+EXA_URL = os.environ.get("EXA_URL", "https://api.exa.ai/search")
 
 SYSTEM = """You are a session watcher: an experienced engineer quietly \
 observing another engineer (the agent) work, exactly as a human overseer \
@@ -53,8 +58,36 @@ right answer while real progress is happening - but a wedge you can see \
 in your notes and stay silent about is the one failure you are here to \
 prevent.
 
+If you decide to speak and the agent is stuck on a specific error, \
+library behaviour or tool quirk that a web search would likely explain, \
+set "lookup" to a short search query (the error text plus the library \
+name). You will get results and a chance to rewrite your intervention \
+around a concrete fact. Otherwise "lookup" is null.
+
 Reply with JSON only:
-{"notes": "...", "expectations": ["..."], "speak": "..." or null}"""
+{"notes": "...", "expectations": ["..."], "speak": "..." or null,
+ "lookup": "..." or null}"""
+
+GROUND = """Search results for your lookup are below. Rewrite your \
+intervention so it leads with the most useful concrete fact from them \
+(what the error usually means, the known cause, the fix pattern) and \
+names the source domain in brackets. Keep it to two or three sentences, \
+addressed to the agent as "you". If nothing relevant came back, keep your \
+original intervention. Reply with JSON only: {"speak": "..."}"""
+
+
+def exa_search(query):
+    body = {"query": query[:300], "numResults": 4, "type": "auto",
+            "contents": {"text": {"maxCharacters": 1200}}}
+    req = urllib.request.Request(
+        EXA_URL, data=json.dumps(body).encode(),
+        headers={"content-type": "application/json", "x-api-key": EXA_KEY})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        data = json.loads(resp.read())
+    out = []
+    for r in data.get("results", [])[:4]:
+        out.append(f"[{r.get('url','')}]\n{(r.get('text') or '')[:1200]}")
+    return "\n\n".join(out)
 
 
 def _load(path, default):
@@ -180,6 +213,23 @@ def main():
     _save(convo_p, convo[-2 * KEEP_EXCHANGES:])
 
     speak = data.get("speak")
+    lookup = data.get("lookup")
+    grounded = False
+    if isinstance(speak, str) and speak.strip() and EXA_KEY \
+            and isinstance(lookup, str) and lookup.strip():
+        try:
+            found = exa_search(lookup)
+            if found:
+                raw2 = call_model(messages + [
+                    {"role": "assistant", "content": raw[:4000]},
+                    {"role": "user", "content": GROUND + "\n\n" + found}])
+                m2 = re.search(r"\{.*\}", raw2, re.S)
+                d2 = json.loads(m2.group(0), strict=False) if m2 else {}
+                if isinstance(d2.get("speak"), str) and d2["speak"].strip():
+                    speak, grounded = d2["speak"], True
+        except Exception as e:
+            with open(os.path.join(MEM, "watcher.log"), "a") as f:
+                f.write(f"lookup failed: {type(e).__name__}: {e}\n")
     active = os.path.join(MEM, f".dk_active.{session}")
     if isinstance(speak, str) and speak.strip():
         with open(active, "w") as f:
@@ -187,8 +237,8 @@ def main():
     else:
         open(active, "w").close()      # fresh-and-empty: nothing to say
     with open(os.path.join(MEM, "watcher.log"), "a") as f:
-        f.write(f"ok: spoke={bool(speak)} seen={state['seen']} "
-                f"exp={len(state['expectations'])}\n")
+        f.write(f"ok: spoke={bool(speak)} grounded={grounded} "
+                f"seen={state['seen']} exp={len(state['expectations'])}\n")
     return 0
 
 

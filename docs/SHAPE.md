@@ -52,7 +52,20 @@ that cannot finish on the current balance.
    promises loses the watcher's trust - by judgement, the way a human
    stops believing "almost done" the third time they hear it.
 
-4. **The watcher's notes are its memory.** It self-compacts: notes and
+4. **The watcher may look things up.** A human overseer who sees the
+   agent fighting the same error for twenty minutes searches for it.
+   The watcher can too (Exa or equivalent), and grounds its intervention
+   in what it finds - a known library behaviour, a common cause, a
+   version quirk. This is the one kind of feedback the evidence says
+   reliably helps: information the agent does not already have, not a
+   paraphrase of its own transcript. Rule: lookups happen only when the
+   watcher has decided to speak, and are attached as facts with source.
+   Benchmark guard: on tasks with public fixes (SWE-bench), lookup is
+   contamination and stays OFF; on seeded-bug and original tasks it is
+   fair game. Whether grounded interventions beat ungrounded ones is a
+   bench variable (watcher+lookup vs watcher).
+
+5. **The watcher's notes are its memory.** It self-compacts: notes and
    expectations carry the arc; old raw exchanges can be dropped from
    its context once distilled. Seeing the whole session does not mean
    storing the whole session.
