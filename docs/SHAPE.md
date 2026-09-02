@@ -26,9 +26,12 @@ criterion:
   2. Branched forks (~$5): 20 wedge moments, watcher-on vs watcher-off
      continuations. If speaking does not raise recovery over silence,
      stop; the bench is then also calibrated either way.
-  3. One paired A/B (~$10-25): only the build that survived 1 and 2,
-     on a task family with a 30-50% baseline, pass^k endpoint,
-     sequential stopping. If it does not separate, that is the answer.
+  3. One paired A/B: only the build that survived 1 and 2, on a task
+     family with a 30-50% baseline, pass^k endpoint, sequential
+     stopping. Cost depends on the instrument: goal-mode marathon
+     ~$10-25; Terminal-Bench 4.0 with a Sonnet-class agent ~$1-1.5k,
+     Opus/Fable-class ~$3.6k (evals/terminalbench/SCOPING.md). If it
+     does not separate, that is the answer.
 
 No further marathon-style runs of unvalidated builds. No arm launched
 that cannot finish on the current balance.
