@@ -78,6 +78,54 @@ def extract():
     print(f"extracted {n} moments -> {MOMENTS}/")
 
 
+def extract_swe():
+    """Process-labeled moments from the SWE runs (no outcome contamination):
+      wedge   >=3 failed Edit results within the last 8 messages of the prefix
+      healthy a busy, productive stretch: >=6 distinct tool calls in the last
+              10 messages, no failed edits, no repeated identical calls
+              (hard negative - active work that must NOT be flagged)
+    Prefixes cut at the moment the condition first holds."""
+    from inspect_ai.log import read_eval_log
+    os.makedirs(MOMENTS, exist_ok=True)
+    n = 0
+    for f in sorted(glob.glob(os.path.join(REPO, "evals/swe/logs/arms/*.eval"))):
+        log = read_eval_log(f, resolve_attachments=True)
+        if not log.samples: continue
+        arm = log.eval.task.replace("swe_", "")
+        for s_ in log.samples:
+            rows = []
+            for m in s_.messages:
+                r = getattr(m, "role", ""); t = getattr(m, "text", "") or ""
+                if r == "tool":
+                    rows.append(("tool", t[:600], ("String to replace not found" in t
+                                 or ("old_string" in t and "not found" in t))))
+                elif r in ("user", "assistant") and t.strip() and "<dk-probe>" not in t:
+                    calls = [c.function for c in (getattr(m, "tool_calls", None) or [])]
+                    rows.append((r, t, calls))
+            done = set()
+            for i in range(8, len(rows)):
+                win = rows[i-8:i]
+                fails = sum(1 for x in win if x[0] == "tool" and x[2] is True)
+                calls = [c for x in win if x[0] == "assistant" for c in (x[2] or [])]
+                if fails >= 3 and "wedge" not in done:
+                    label = "wedge"
+                elif (len(calls) >= 6 and fails == 0 and len(set(calls)) >= 3
+                      and "healthy" not in done and i > 12):
+                    label = "healthy"
+                else:
+                    continue
+                done.add(label)
+                msgs = [{"type": x[0], "uuid": str(uuid.uuid4()),
+                         "message": {"content": x[1]}} for x in rows[:i] if x[0] != "tool"]
+                if len(msgs) < 4: continue
+                tid = str(s_.id).split("__")[-1]
+                name = f"{label}_swe-{arm}_{tid}_ep{getattr(s_, 'epoch', 1)}"
+                with open(os.path.join(MOMENTS, name + ".jsonl"), "w") as out:
+                    out.write("\n".join(json.dumps(m) for m in msgs))
+                n += 1
+    print(f"extracted {n} SWE moments -> {MOMENTS}/")
+
+
 def _chunks(mf):
     """Split a moment at driver-continue messages -> growing prefixes."""
     lines = open(mf).read().splitlines()
@@ -155,24 +203,46 @@ def run(name, watch_py, env_extra):
     results.close()
 
 
+def _wilson(k, n, z=1.96):
+    if not n: return (0, 0)
+    p = k / n; d = 1 + z*z/n
+    c = (p + z*z/(2*n)) / d
+    h = z * ((p*(1-p)/n + z*z/(4*n*n)) ** 0.5) / d
+    return (max(0, c-h), min(1, c+h))
+
+
 def report():
+    from math import comb
     rows = [json.loads(l) for l in open(RESULTS)]
     variants = sorted({r["variant"] for r in rows})
-    print(f"{'variant':<22} {'wedge fire (recall)':<20} {'healthy fire (FP)':<18} n")
+    print(f"{'variant':<20} {'wedge recall [95% CI]':<28} {'healthy FP [95% CI]':<26} n")
+    stats = {}
     for v in variants:
         vr = [r for r in rows if r["variant"] == v]
-        for lab, tag in (("wedge", "recall"), ("healthy", "FP")):
-            pass
         w = [r for r in vr if r["label"] == "wedge"]
         h = [r for r in vr if r["label"] == "healthy"]
         wf = sum(r["fired"] for r in w); hf = sum(r["fired"] for r in h)
-        print(f"{v:<22} {wf}/{len(w):<19} {hf}/{len(h):<17} {len(vr)}")
+        lo, hi = _wilson(wf, len(w)); lo2, hi2 = _wilson(hf, len(h))
+        print(f"{v:<20} {wf}/{len(w)} [{lo:.2f}-{hi:.2f}]{'':<10} {hf}/{len(h)} [{lo2:.2f}-{hi2:.2f}]{'':<8} {len(vr)}")
+        stats[v] = {r["moment"]: r["fired"] for r in vr}
+    # paired sign test on wedge moments shared by each pair of variants
+    print("\npaired (wedge moments both variants saw; McNemar exact):")
+    for i, a in enumerate(variants):
+        for b in variants[i+1:]:
+            shared = [m for m in stats[a] if m in stats[b] and m.startswith("wedge")]
+            aw = sum(1 for m in shared if stats[a][m] and not stats[b][m])
+            bw = sum(1 for m in shared if stats[b][m] and not stats[a][m])
+            n = aw + bw
+            p = sum(comb(n, k) for k in range(min(aw, bw)+1)) * 2 / 2**n if n else 1
+            print(f"  {a} vs {b}: {aw}-{bw} discordant of {len(shared)}, p={min(p,1):.2f}")
 
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "report"
     if cmd == "extract":
         extract()
+    elif cmd == "extract-swe":
+        extract_swe()
     elif cmd == "run":
         env_extra = dict(kv.split("=", 1) for kv in sys.argv[4:])
         run(sys.argv[2], sys.argv[3], env_extra)
