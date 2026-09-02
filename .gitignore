@@ -27,3 +27,6 @@ evals/swe/pulled60.txt
 evals/goal/ca-bundle.crt
 evals/bench/results.jsonl
 evals/bench/.mem/
+evals/bench/.mem*/
+evals/bench/.stage1_*.log
+evals/bench/tb_cache/
