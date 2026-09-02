@@ -6,6 +6,20 @@ there and what was actually tested.
 
 ---
 
+## 2026-09-02 — the free baseline sets the bar
+
+Counter-gated baseline (evals/bench/baseline_counter.py: repeat >=3,
+same error >=3, progress plateau; templated alert; no model call) over
+the full 163-moment corpus: 40/92 wedge recall, 17/71 healthy false
+fires. On the ten wedges all variants saw it beats every model prompt:
+8-0 vs current (p=0.01), 6-0 vs stale (p=0.03), 5-0 vs arc-patch
+(p=0.06). Caveat: its triggers partly mirror the corpus labeling rules,
+so recall is somewhat circular. Still, this is what the stateful watcher
+must clear with a McNemar margin - 43% recall at <=24% FP - before any
+end-to-end run. Stage 1 (watcher via run-seq over 163 moments) costs
+~$2; balance $0.66.
+
+
 ## 2026-09-02 — the semantic-wedge corpus, from frontier agents, for free
 
 The bench corpus was 41/43 wedges of one mechanical failure (small
