@@ -154,11 +154,24 @@ def _chunks(mf):
     return [lines[:c] for c in cuts]
 
 
+def _already(name):
+    """Moments already recorded for this variant - reruns resume (container
+    restarts kill long sweeps; results.jsonl is append-only per moment)."""
+    try:
+        return {json.loads(l)["moment"] for l in open(RESULTS)
+                if f'"variant": "{name}"' in l}
+    except OSError:
+        return set()
+
+
 def run_seq(name, watch_py, env_extra):
     scratch = os.environ.get("BENCH_MEM", os.path.join(HERE, ".mem"))
     results = open(RESULTS, "a")
+    done = _already(name)
     for mf in _moment_files():
         moment = os.path.basename(mf)[:-6]
+        if moment in done:
+            continue
         subprocess.run(["rm", "-rf", scratch]); os.makedirs(scratch)
         env = dict(os.environ, DK_MEM=scratch, DK_SESSION="bench",
                    DK_API_KEY=os.environ["OPENROUTER_API_KEY"],
@@ -191,8 +204,11 @@ def run(name, watch_py, env_extra):
     results = open(RESULTS, "a")
     files = _moment_files()
     fired = {}
+    done = _already(name)
     for mf in files:
         moment = os.path.basename(mf)[:-6]
+        if moment in done:
+            continue
         subprocess.run(["rm", "-rf", scratch])
         os.makedirs(scratch)
         subprocess.run(["bash", os.path.join(REPO, "scripts/dk_bootstrap.sh"),
