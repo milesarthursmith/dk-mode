@@ -6,6 +6,35 @@ there and what was actually tested.
 
 ---
 
+## 2026-09-02 — stage 1: watcher vs the $0 baseline
+
+Stateful watcher (evals/bench/watcher_session.py, gemini-2.5-flash,
+looks every 10 messages / every driver continue) over all 163 moments,
+~$4.4. Against the counter baseline:
+
+    watcher   50/92 wedge recall   21/71 false fires   first fire look 2.2
+    baseline  40/92                17/71               look 3.7
+
+Paired McNemar on 92 wedges: 22 watcher-only vs 12 baseline-only,
+p=0.12. Directional, not a margin. The whole edge is on the mechanical
+corpus (23/43 vs 13/43); on the 49 semantic Terminal-Bench wedges it is
+a dead tie, 27/49 each, 11-11 discordant. False fires 21 vs 17, p=0.56 -
+but several of the watcher's "false" fires are correct overseer calls on
+mislabeled healthy moments (done-claim without the answer file written;
+hunting a LAPACK symbol scipy already exposes; a change that reduced
+the similarity score). Heuristic healthy labels are contaminated, as
+the methodology research predicted. Where the watcher beat the
+baseline its alerts were specific and included a genuine logic wedge
+(a file-static symbol the agent kept trying to reach from another
+translation unit).
+
+Verdict: stage-1 kill criterion NOT cleared as written. No stage 2.
+Next is free: human relabel of the 21 disputed fires and 12 missed
+wedges (evals/bench/review_stage1.md), then a within-shape sweep of
+look cadence / kept exchanges on the semantic corpus (~$4 per variant).
+Balance $46.17.
+
+
 ## 2026-09-02 — the free baseline sets the bar
 
 Counter-gated baseline (evals/bench/baseline_counter.py: repeat >=3,
