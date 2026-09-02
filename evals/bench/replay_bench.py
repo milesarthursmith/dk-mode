@@ -158,8 +158,13 @@ def _already(name):
     """Moments already recorded for this variant - reruns resume (container
     restarts kill long sweeps; results.jsonl is append-only per moment)."""
     try:
-        return {json.loads(l)["moment"] for l in open(RESULTS)
-                if f'"variant": "{name}"' in l}
+        done = set()
+        for l in open(RESULTS):
+            if f'"variant": "{name}"' in l:
+                r = json.loads(l)
+                if not r.get("error"):
+                    done.add(r["moment"])
+        return done
     except OSError:
         return set()
 
@@ -190,10 +195,13 @@ def run_seq(name, watch_py, env_extra):
             if fired and first_fire is None:
                 first_fire = ci
         text = open(a).read().strip() if fired else ""
+        wl = os.path.join(scratch, "watcher.log")
+        failed = (os.path.exists(wl) and "FAILED" in open(wl).read()
+                  and not fired) or (not fired and time.time() - t0 < 3)
         rec = {"variant": name, "moment": moment,
                "label": moment.split("_")[0], "fired": fired,
                "first_fire_chunk": first_fire, "alert": text[:400],
-               "secs": round(time.time() - t0, 1)}
+               "secs": round(time.time() - t0, 1), "error": bool(failed)}
         results.write(json.dumps(rec) + "\n"); results.flush()
         print(f"{name} {moment}: {'FIRED@' + str(first_fire) if fired else 'quiet'} ({rec['secs']:.0f}s)")
     results.close()
@@ -246,7 +254,7 @@ def _wilson(k, n, z=1.96):
 
 def report():
     from math import comb
-    rows = [json.loads(l) for l in open(RESULTS)]
+    rows = [r for r in (json.loads(l) for l in open(RESULTS)) if not r.get("error")]
     variants = sorted({r["variant"] for r in rows})
     print(f"{'variant':<20} {'wedge recall [95% CI]':<28} {'healthy FP [95% CI]':<26} n")
     stats = {}
