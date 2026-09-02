@@ -4,6 +4,35 @@ dk-mode is an LLM watching the session evolve: consciously summarising,
 detecting patterns through judgement, literally as a human overseer
 would. This is the product. Everything else in the repo serves it.
 
+The plain version (Miles, 2026-09-01): "can I replace myself with
+another LLM?" The human overseer's job during a long agent session is
+mostly watching, remembering what was already tried, and occasionally
+saying "you did that already" or "that's not what I asked for". The
+product is that job, done by a model, so the human's input becomes
+trivial. Every eval question reduces to: does the watcher do what the
+absent human would have done, and does the session end better for it.
+
+## Spend discipline (added after burning ~$40 on end-to-end runs)
+
+Not sure we won't burn more. The literature says this shape is hard,
+and three instruments measured nothing for the previous design. What is
+different now is the order of operations, and each stage has a kill
+criterion:
+
+  1. Replay bench (cents): the watcher must beat the arc-patch prompt
+     on wedge recall with a McNemar margin AND hold false fires on hard
+     negatives. If it cannot detect wedges from frozen transcripts, no
+     end-to-end run happens.
+  2. Branched forks (~$5): 20 wedge moments, watcher-on vs watcher-off
+     continuations. If speaking does not raise recovery over silence,
+     stop; the bench is then also calibrated either way.
+  3. One paired A/B (~$10-25): only the build that survived 1 and 2,
+     on a task family with a 30-50% baseline, pass^k endpoint,
+     sequential stopping. If it does not separate, that is the answer.
+
+No further marathon-style runs of unvalidated builds. No arm launched
+that cannot finish on the current balance.
+
 ## What this means, concretely
 
 1. **The watcher is stateful.** One continuous monitor conversation per
