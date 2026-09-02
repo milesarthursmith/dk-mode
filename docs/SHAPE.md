@@ -36,6 +36,19 @@ criterion:
 No further marathon-style runs of unvalidated builds. No arm launched
 that cannot finish on the current balance.
 
+## Vocabulary (use these words; nothing else)
+
+- **watcher** - the stateful LLM overseer. The product.
+- **senses** - deterministic signals (repeat counts, error streaks, score
+  plateaus) computed at every look and annotated into what the watcher
+  reads as `[sense: ...]`. They inform; they never decide.
+- **notes / expectations** - the watcher's memory across looks.
+- **intervention** - what the watcher injects when it decides to speak.
+- **lookup** - a search the watcher runs to ground an intervention.
+- **guard** (retired) - a rule that decides when to intervene. Not
+  built. The bench's counter-gated baseline is the reference guard the
+  watcher must beat.
+
 ## What this means, concretely
 
 1. **The watcher is stateful.** One continuous monitor conversation per
@@ -45,7 +58,7 @@ that cannot finish on the current balance.
 
 2. **Judgement decides. Nothing mechanical gates the watcher.**
    Deterministic signals (repeat counts, error streaks, score
-   plateaus) are SENSES: they annotate the delta the watcher reads.
+   plateaus) are senses: they annotate the delta the watcher reads.
    They never decide whether the watcher runs or whether it speaks.
    The watcher may overrule them in either direction.
 

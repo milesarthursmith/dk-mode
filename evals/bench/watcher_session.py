@@ -43,7 +43,7 @@ it. An agent whose predictions keep failing has lost credibility: judge \
 its stated confidence accordingly, as a person would after the third \
 "almost done".
 
-Lines marked [signal: ...] are mechanical annotations (repeat counts, \
+Lines marked [sense: ...] are mechanical annotations (repeat counts, \
 error streaks, score plateaus). They are senses, not verdicts - you may \
 overrule them in either direction (a repeated command can be a legitimate \
 sweep; a quiet stretch can be a wedge).
@@ -141,17 +141,17 @@ def signals(msgs):
         seen[k] = seen.get(k, 0) + 1
     rep = {k: v for k, v in seen.items() if v >= 3}
     for k, v in sorted(rep.items(), key=lambda x: -x[1])[:3]:
-        out.append(f"[signal: assistant repeated near-identical message x{v}: \"{k[:70]}...\"]")
+        out.append(f"[sense: assistant repeated near-identical message x{v}: \"{k[:70]}...\"]")
     # driver-reported score plateau
     pcts = [int(m.group(1)) for t in msgs
             for m in [re.search(r"\((\d+)% fixed\)", t["text"])] if m]
     if len(pcts) >= 3 and len(set(pcts[-3:])) == 1:
-        out.append(f"[signal: reported progress flat at {pcts[-1]}% for {len(pcts) - pcts[::-1].index(pcts[-1])} checks]")
+        out.append(f"[sense: reported progress flat at {pcts[-1]}% for {len(pcts) - pcts[::-1].index(pcts[-1])} checks]")
     # error mentions streak in recent assistant messages
     errs = sum(1 for m in msgs[-8:] if m["role"] == "assistant"
                and re.search(r"error|failed|apolog", m["text"], re.I))
     if errs >= 4:
-        out.append(f"[signal: {errs} of last 8 assistant messages mention errors/failures]")
+        out.append(f"[sense: {errs} of last 8 assistant messages mention errors/failures]")
     return out
 
 
