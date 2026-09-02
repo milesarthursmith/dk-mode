@@ -6,6 +6,32 @@ there and what was actually tested.
 
 ---
 
+## 2026-09-02 — cadence is not the lever
+
+watcher-dense (look every 5 messages, 6 exchanges kept) on the 104
+semantic moments, ~$5 across three container restarts (results now
+flush per moment; resume filter added):
+
+    baseline-seq        27/49 wedges   10/55 false fires
+    watcher (every 10)  27/49          15/55
+    watcher-dense (5)   22/49          20/55
+
+Paired dense vs baseline on healthy moments: 16-6 discordant, p=0.05.
+More looks and more retained context make the watcher more
+trigger-happy and no better at wedges. First-fire timing is unchanged
+(~30-37 messages into a wedge for all three). Where dense did catch
+something the others missed, the alerts were good ("the interpreter is
+still timing out even at 120s - this is an infinite loop, not a slow
+one; stop waiting on it"), so judgement quality is not the problem;
+selectivity is.
+
+Within-shape knobs left: the judgement prompt itself (what counts as
+off-track; how expectations are checked; notes format) and the watcher
+model. Before spending on either, the human relabel of the 33 disputed
+moments (evals/bench/review_stage1.md) decides how much of the
+false-fire gap is real. Spend to date on stage 1: ~$10. Balance $42.
+
+
 ## 2026-09-02 — stage 1: watcher vs the $0 baseline
 
 Stateful watcher (evals/bench/watcher_session.py, gemini-2.5-flash,
