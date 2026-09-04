@@ -6,6 +6,34 @@ there and what was actually tested.
 
 ---
 
+## 2026-09-03 — v2 judgement prompt: selectivity costs recall, buys nothing
+
+watcher_v2 (settle expectations first; five named reasons to speak;
+silence otherwise) on the semantic corpus, ~$5, key limit raised to
+$300 first:
+
+    baseline-seq   27/49 wedges   10/55 false fires   first fire look 3.7
+    watcher        27/49          15/55               3.6
+    watcher-v2     13/44          11/54               5.8
+
+Paired v2 vs watcher on wedges 1-12, p<0.01; v2 vs baseline 3-16,
+p<0.01; false fires indistinguishable from the baseline (9-8, p=1.0).
+Explicit selectivity made the watcher quiet on wedges and late when it
+did speak, and its remaining fires on "healthy" moments are the same
+done-claim / wrong-approach calls v1 made (which may well be correct -
+labels unreviewed). Its alerts stay causal and specific ("the
+define-variable! calls for length and map are not taking effect - the
+error persists after your redefinition").
+
+Stage-1 tally after three within-shape variants (cadence, context,
+judgement prompt): none beats the $0 counter on frontier-agent semantic
+wedges; the LLM watcher matches its detection rate and differs in alert
+quality, which replay cannot value. Untouched knobs: the watcher MODEL
+(all runs used gemini-2.5-flash) and the notes format. The human relabel
+(33 items) remains the free step that decides what the false-fire
+column even means. Stage-1 spend ~$15; balance ~$37; key remaining ~$195.
+
+
 ## 2026-09-02 — v2 prompt variant blocked by the key limit
 
 watcher_v2 (settle expectations first; five named reasons to speak;
