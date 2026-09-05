@@ -4,7 +4,9 @@ __pycache__/
 # An install into this repo writes here. dk.jsonl holds mined conversation
 # text: a real run once mined a live API key out of a transcript before
 # redaction existed, so this must never be committable by accident.
-.claude/
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
 
 .env
 *.log
