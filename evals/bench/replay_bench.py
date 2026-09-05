@@ -79,7 +79,10 @@ def extract():
                 idx, pct = curve[k]
                 if k >= 3 and all(c[1] == pct for c in curve[k-3:k]):
                     label = "wedge"
-                elif k >= 1 and pct > curve[k-1][1]:
+                elif k >= 1 and pct > max(c[1] for c in curve[:k]):
+                    # a NEW high-water mark. A bounce back to the old plateau
+                    # after self-inflicted damage (41,41,17,41) is not progress -
+                    # the watcher was right to call those out (review 2026-09-05).
                     label = "healthy"
                 else:
                     continue
