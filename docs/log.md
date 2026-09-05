@@ -6,6 +6,70 @@ there and what was actually tested.
 
 ---
 
+## 2026-09-05 — judgment labels replace the automatic ones; the watcher now beats the counter
+
+The bench's ground truth was wrong in kind, not in degree. Every label
+so far came from a rule: the wedge_/healthy_ filename prefix encoded how
+a run was staged and how it ended (score went up = healthy), never
+whether an overseer watching at that moment would have spoken. Miles
+called this out repeatedly; CLAUDE.md now carries it as rule one and a
+UserPromptSubmit hook re-injects it on every message.
+
+Fix: four readers each took 40 of the 160 moments, read every transcript
+in full, and decided by judgment alone whether to speak, what they would
+say, and why (evals/bench/labels/shard{0-3}.jsonl, merged into
+labels/judgment.jsonl; keys moment/speak/would_say/reason/confidence).
+No counting rule, no prefix, no score curve. Result: 78 speak, 82 silent;
+confidence 76 high / 63 medium / 21 low.
+
+The readers disagreed with the prefixes on 48 of 160 moments (30%):
+
+    prefix        judgment: speak   silent
+    wedge_  (92)             61       31
+    healthy_(68)             17       51
+
+The 31 "wedge" files where a reader stayed silent are mostly messy but
+advancing (each error diagnosed and fixed; task actually finished and
+the "loop" is the harness bouncing a completion call). The 17 "healthy"
+files where a reader would speak include the clearest wedge in the
+corpus (healthy_dk_ep2_6: hundreds of repeated comment lines after ~110
+turns at 0% fixed) and several done-claims without evidence. Those are
+the moments the old labels had been counting as watcher false fires.
+
+Re-scored against judgment labels (evals/bench/score_judgment.py; recall
+= fired on speak-moments, false fire = fired on silent-moments; paired
+McNemar against the $0 counter on the same moments):
+
+    variant            recall          false fire      vs counter   p
+    counter-baseline   31/78  40%      24/82  29%      -            -
+    watcher            48/78  62%      22/82  27%      25 / 8       0.005
+    watcher-dense      20/40  50%      22/64  34%      11 / 7       0.48
+    watcher-v2         10/36  28%      14/62  23%       6 / 12      0.24
+    watcher-think      (run resumed, 62 moments outstanding; row below when done)
+
+Dropping the 21 low-confidence labels: watcher 45/71 vs counter 28/71,
+p=0.002, false fires equal (16/68 each). Restricted to the 98 moments
+every variant ran (mostly the Terminal-Bench semantic corpus): 22/37 vs
+13/37, p=0.064, false fires 19 vs 20 of 61.
+
+What changed and what did not. Under the automatic labels the watcher
+tied the counter (50/92 vs 40/92, p=0.12) and looked to fire falsely on
+"healthy" moments. Under judgment labels the same result rows show the
+watcher finding 17 more speak-moments than the counter and losing on 8,
+at the same false-fire rate. The label fix, not any watcher change,
+produced the separation: the watcher had been right on the done-claim
+and wrong-approach fires the old labels penalised. The stage-1 kill
+criterion (beat the counter on recall with a McNemar margin AND hold
+false fires) is met on the full corpus, at the margin on the semantic
+subset alone. The reasoning-on row decides whether the model's thinking
+adds anything before stage 2 (branched forks).
+
+Caveat that stays: one reader per moment. Inter-reader agreement is
+unmeasured, and the readers were LLM subagents, not Miles. The 21 low
+confidence moments are listed with reasons in judgment.jsonl for a
+human pass.
+
+
 ## 2026-09-03 — v2 judgement prompt: selectivity costs recall, buys nothing
 
 watcher_v2 (settle expectations first; five named reasons to speak;
