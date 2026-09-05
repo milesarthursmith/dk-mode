@@ -1,0 +1,15 @@
+/home/user/dk-mode/evals/bench/moments/healthy_challenge_ep1_1.jsonl
+/home/user/dk-mode/evals/bench/moments/healthy_dk_ep2_7.jsonl
+/home/user/dk-mode/evals/bench/moments/wedge_dk_ep1_14.jsonl
+/home/user/dk-mode/evals/bench/moments_tb/healthy_tb2-terminuskira-opus46-mcmc-sampling-stan_D8WGdA6.jsonl
+/home/user/dk-mode/evals/bench/moments_tb/healthy_tb2-terminuskira-opus46-winning-avg-corewars_hbwDVEk.jsonl
+/home/user/dk-mode/evals/bench/moments_tb/healthy_tb2-vix-opus47-mailman_8Pu37kv.jsonl
+/home/user/dk-mode/evals/bench/moments_tb/wedge_tb2-claudecode-glm47-compile-compcert_XQPayUe.jsonl
+/home/user/dk-mode/evals/bench/moments_tb/wedge_tb2-claudecode-glm47-feal-differential-cryptanalysis_dM9oENKb.jsonl
+/home/user/dk-mode/evals/bench/moments_tb/wedge_tb2-claudecode-glm47-llm-inference-batching-scheduler_tFaVfE5.jsonl
+/home/user/dk-mode/evals/bench/moments_tb/wedge_tb2-claudecode-glm47-reshard-c4-data_jznQLMX.jsonl
+/home/user/dk-mode/evals/bench/moments_tb/wedge_tb2-claudecode-glm47-winning-avg-corewars_bcuX8mDb.jsonl
+/home/user/dk-mode/evals/bench/moments_tb/wedge_tb2-terminus2-opus46-extract-moves-from-video_kJHowo4.jsonl
+/home/user/dk-mode/evals/bench/moments_tb/wedge_tb2-terminus2-opus46-train-fasttext_oVfHSCm.jsonl
+/home/user/dk-mode/evals/bench/moments_tb/wedge_tb2-terminuskira-opus46-train-fasttext_NXbuGU5.jsonl
+/home/user/dk-mode/evals/bench/moments_tb/wedge_tb2-vix-opus47-video-processing_go5SJ7cb.jsonl
