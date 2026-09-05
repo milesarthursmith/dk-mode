@@ -158,9 +158,18 @@ def signals(msgs):
     return out
 
 
+# Reasoning: OFF by default on OpenRouter even for thinking-capable models.
+# A judgement-only watcher must think; DK_REASONING=high|medium|low turns
+# it on (OpenRouter unified "reasoning" param; maps to Gemini thinking
+# budget / Claude extended thinking / o-series effort).
+REASONING = os.environ.get("DK_REASONING", "").strip().lower()
+
+
 def call_model(messages):
-    body = {"model": MODEL, "max_tokens": 2000, "temperature": 0,
-            "messages": messages}
+    body = {"model": MODEL, "max_tokens": 8000 if REASONING else 2000,
+            "temperature": 0, "messages": messages}
+    if REASONING:
+        body["reasoning"] = {"effort": REASONING}
     req = urllib.request.Request(
         API_URL, data=json.dumps(body).encode(),
         headers={"content-type": "application/json",
