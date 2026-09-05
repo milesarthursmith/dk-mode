@@ -200,7 +200,7 @@ def run_seq(name, watch_py, env_extra):
                   and not fired) or (not fired and time.time() - t0 < 3)
         rec = {"variant": name, "moment": moment,
                "label": moment.split("_")[0], "fired": fired,
-               "first_fire_chunk": first_fire, "alert": text[:400],
+               "first_fire_chunk": first_fire, "alert": text[:2000],
                "secs": round(time.time() - t0, 1), "error": bool(failed)}
         results.write(json.dumps(rec) + "\n"); results.flush()
         print(f"{name} {moment}: {'FIRED@' + str(first_fire) if fired else 'quiet'} ({rec['secs']:.0f}s)")
@@ -237,7 +237,7 @@ def run(name, watch_py, env_extra):
         text = open(active[0]).read().strip() if active else ""
         rec = {"variant": name, "moment": moment,
                "label": moment.split("_")[0],
-               "fired": bool(text), "alert": text[:400], "secs": round(dt, 1)}
+               "fired": bool(text), "alert": text[:2000], "secs": round(dt, 1)}
         results.write(json.dumps(rec) + "\n"); results.flush()
         fired[moment] = rec["fired"]
         print(f"{name} {moment}: {'FIRED' if rec['fired'] else 'quiet'} ({dt:.0f}s)")
