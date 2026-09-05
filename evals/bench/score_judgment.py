@@ -73,10 +73,20 @@ def main():
     pos = {m for m, r in lab.items() if r["speak"]}
     neg = {m for m, r in lab.items() if not r["speak"]}
     print(f"judgment labels: {len(lab)} moments, speak={len(pos)}, silent={len(neg)}\n")
-    base = res.get("counter-baseline-seq") or res.get("counter-baseline", {})
+    base = res.get("counter-baseline", {})      # covers every moment
+    if "--no-low" in sys.argv:                  # sensitivity: drop low-confidence labels
+        pos = {m for m in pos if lab[m].get("confidence") != "low"}
+        neg = {m for m in neg if lab[m].get("confidence") != "low"}
+        print(f"(low-confidence labels dropped: speak={len(pos)}, silent={len(neg)})\n")
+    common = None
+    if "--common" in sys.argv:                  # every variant on the SAME moments
+        common = set.intersection(*(set(r) for r in res.values() if len(r) >= 100))
+        print(f"(restricted to {len(common)} moments present in all main variants)\n")
     rows = []
     for v in sorted(res, key=lambda v: -len(res[v])):
         fired = res[v]
+        if common is not None:
+            fired = {m: f for m, f in fired.items() if m in common}
         P = [m for m in pos if m in fired]
         N = [m for m in neg if m in fired]
         if len(P) + len(N) < 20:
