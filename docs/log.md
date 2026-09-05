@@ -45,7 +45,7 @@ McNemar against the $0 counter on the same moments):
     watcher            48/78  62%      22/82  27%      25 / 8       0.005
     watcher-dense      20/40  50%      22/64  34%      11 / 7       0.48
     watcher-v2         10/36  28%      14/62  23%       6 / 12      0.24
-    watcher-think      (run resumed, 62 moments outstanding; row below when done)
+    watcher-think      34/75  45%      20/82  24%      13 / 8       0.38
 
 Dropping the 21 low-confidence labels: watcher 45/71 vs counter 28/71,
 p=0.002, false fires equal (16/68 each). Restricted to the 98 moments
@@ -63,6 +63,22 @@ criterion (beat the counter on recall with a McNemar margin AND hold
 false fires) is met on the full corpus, at the margin on the semantic
 subset alone. The reasoning-on row decides whether the model's thinking
 adds anything before stage 2 (branched forks).
+
+Reasoning ON (DK_REASONING=high, gemini-2.5-flash thinking, ~$2.5 for
+the resumed 62 moments, 3 moments still erroring) is WORSE than the same
+watcher with thinking off. Paired on the 157 moments both ran: speak-
+moments 34 vs 46 fired (only-reasoning 7, only-plain 19, p=0.029);
+silent-moments 20 vs 22 (p=0.82). Checked that this is not the known
+budget bug (thinking eating max_tokens and returning empty content =
+recorded as quiet): a direct call on one wedge moment returns finish=
+stop, 766 reasoning tokens, full JSON. The thinking watcher simply
+talks itself out of speaking more often: the 19 moments it missed and
+the plain watcher caught are repeated identical Edit failures, hand-
+waved rewrites, and busywork after the real fix landed - exactly the
+"messy but is it advancing?" calls where deliberation finds a reason to
+wait. Same false-fire rate, so it is not trading recall for precision.
+Reasoning mode stays available but is not the default; the model knob
+is still untested (all rows gemini-2.5-flash).
 
 Caveat that stays: one reader per moment. Inter-reader agreement is
 unmeasured, and the readers were LLM subagents, not Miles. The 21 low
