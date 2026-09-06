@@ -1,0 +1,3 @@
+<self-steering>
+Your nodes.py fix actually changed the pass/fail pattern for the first time all session — that's real progress, don't revert it. But your last message is inventing pseudocode and repeating copyright boilerplate nonsense that isn't in any real file. Stop: run `python -m pytest tests -q --tb=short 2>&1 | tail -30` to see the actual new traceback text before editing anything else.
+</self-steering>

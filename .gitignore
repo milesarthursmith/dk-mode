@@ -33,3 +33,5 @@ evals/bench/.mem*/
 evals/bench/.stage1_*.log
 evals/bench/tb_cache/
 evals/bench/.shard*/
+evals/react/.build_*.json
+evals/react/.counter_mem/
