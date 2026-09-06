@@ -6,6 +6,24 @@ there and what was actually tested.
 
 ---
 
+## 2026-09-06 — challenge the tiers and the tests
+
+Two documents, on request. docs/TIERS.md: the eval funnel cannot answer
+the product question. Tier 0 labels by rule (forbidden, and measured
+wrong on 48/160). Tier 1's pass is carried by the small-agent corpus
+(p=0.006) and does not hold on frontier agents (23/40 vs 16/40,
+p=0.19); the arc-patch bar in SHAPE.md silently became the counter.
+Tier 2 cannot be run on the 104 Terminal-Bench moments (no state, no
+agent) and has no power at n=20 where it can. Tier 3 costs 40-130x the
+balance where it is informative. docs/TESTS.md: the 119-test suite was
+red since 08-31 (test 55 asserted the muting bug), certifies the
+rejected design (stateless dk_watch, counter tripwire), has zero tests
+for watcher_session.py, and cannot see judgment because every model is
+a canned mock. Fixed test 55, added CI, added the run-before-commit
+rule to CLAUDE.md. Reasoning-on watcher: worse (docs/log.md 09-05).
+Alert-quality reading (does the watcher's alert name the problem the
+reader saw) in progress; result goes into TIERS.md.
+
 ## 2026-09-05 — judgment labels replace the automatic ones; the watcher now beats the counter
 
 The bench's ground truth was wrong in kind, not in degree. Every label

@@ -49,3 +49,7 @@ the answer is a plain explanation, not a restatement.
   run that cannot finish on the current balance.
 - Redact secrets before any commit. Develop only on the assigned
   branch.
+- Run `bash tests/run_dk_tests.sh` before committing anything under
+  scripts/ or tests/. It was red for six days unnoticed (docs/TESTS.md).
+  The suite tests plumbing only; judgment is tested by the labelled
+  moments, never by a mock.
