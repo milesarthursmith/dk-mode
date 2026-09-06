@@ -6,6 +6,45 @@ there and what was actually tested.
 
 ---
 
+## 2026-09-06 (late) — the reaction check on the original model; ten notes read beside the reader
+
+Fresh container, so /opt was rebuilt; the first rebuild put the editable
+install on the pristine copy and every moment reported 0 failing until
+that was caught (details in docs/HANDOVER.md). An OpenRouter key was
+present, and OpenRouter serves gemini-2.5-flash in Anthropic's message
+format, so the continuation now runs the model that was stuck in the
+record (run.py, REACT_BACKEND=openrouter). The seeded bugs are committed
+before replay, with the AI's recorded git restore / reset commands pointed
+at the pristine commit so state stays as recorded; all nine rebuilds
+match their earlier counts.
+
+Found while checking rebuilds against the record: the scorer in goal-dk
+HE6z epoch 1 said "no tests ran" on every check after the first. The
+driver's "785 failing (0% fixed)" was false for that whole session; the
+rebuilt states at the four cuts have 4, 22, 0 and 22 failing. Cause not
+found.
+
+Watcher passes (Sonnet 5 via the CLI, 36 looks) gave every moment a note
+or a judged silence. Beside the reader's sentence: 4 same, 3 partial, 3
+silent. On HE6z the watcher had worked out at look 3 that `git reset
+--hard` erased uncommitted bugs, then by looks 11-14 trusted the AI's
+local pytest (14 to 10 to 4 failing) over the driver and stayed quiet.
+Miles's own quoted line comes from that session, so that is a real gap.
+Nothing tuned.
+
+One moment run fully on the original model, wedge_bare_ep2_8:
+
+    arm      before  after  turns  real cost
+    nothing     466    539     21      $0.17
+    watcher     466    462     18      $0.94
+    counter     466    468     21      $0.26
+
+Unaided, the original model stays stuck (Haiku had not). The watcher arm
+reverted the regression and left the function as told, then held; the
+counter arm read its note and kept editing the same function. Reading in
+docs/REACTION.md. Stopped at about $3.20 total; the remaining 24 arms are
+about $11 and wait on Miles.
+
 ## 2026-09-06 — challenge the tiers and the tests
 
 Two documents, on request. docs/TIERS.md: the eval funnel cannot answer

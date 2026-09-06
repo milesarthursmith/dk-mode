@@ -26,9 +26,10 @@ fail and says "The goal stands. Continue."
    after each agent turn, before the driver's next message. Its note at
    the moment's final look is the one delivered. Model: Claude Sonnet 5
    through the `claude` CLI, reasoning off, lookup off.
-4. **Continuation.** The same coding AI (Claude Code, Haiku 4.5, as in
-   the original runs) is resumed from the same conversation and the same
-   repo state, three ways: the driver's message alone; the same plus the
+4. **Continuation.** The same coding AI (Claude Code; Haiku 4.5 in the
+   pilot, the original gemini-2.5-flash through OpenRouter from
+   wedge_bare_ep2_8 on) is resumed from the same conversation and the
+   same repo state, three ways: the driver's message alone; the same plus the
    watcher's note, injected by a UserPromptSubmit hook the way dk-mode
    delivers it; the same plus the counter's note. Up to 20 tool rounds.
    The sandbox denies network commands, as the original had no network.
@@ -119,8 +120,9 @@ the prompt has forbidden that since, and no later note does it.
   (three of the four sessions had no hook at all). The watcher is told a
   note reached the AI only when it sees it echoed, and never to mention
   its notes.
-- The seeded bugs are uncommitted changes, so `git diff` shows them. That
-  was true in the original runs too and is left as it was.
+- In the pilot the seeded bugs were uncommitted changes, so `git diff`
+  showed them; from wedge_bare_ep2_8 on they are committed (see the
+  changes section above).
 
 ## Results
 
@@ -178,7 +180,47 @@ All three transcripts: evals/react/runs/wedge_bare_ep2_9/.
    further runs on this corpus should commit the seeded bugs first, so
    the AI's own edits are the only diff.
 
-**Spend.** About $3.50 of CLI usage in total for this session: four
+### wedge_bare_ep2_8, on the original model (gemini-2.5-flash)
+
+The moment: the same bare-arm session as the pilot, two driver messages
+earlier. 466 failing; the last visit_Output edit had just taken the count
+from 462 to 466. The reader's sentence: git diff compiler.py and revert
+those edits, then run the one failing test with a long traceback.
+
+The watcher's note (pilot pass, look 9): revert that last edit, confirm
+462, then leave test_item_and_attribute alone and fix test_empty_blocks.
+The counter's note: "You have produced the same step 5 times ('No
+response requested....')".
+
+Rebuild check: 466 failing here, 466 in the driver's message; 35 replayed
+calls, 0 outcome mismatches. Seeded bugs committed.
+
+| arm | failing before | failing after | turns | real cost | what it did (read the transcript) |
+|---|---|---|---|---|---|
+| nothing | 466 | 539 | 21 | $0.17 | Stayed on visit_Output and _output_child_to_const. Added a _PassArg sentinel that leaked into rendered output, rewrote blockvisit and broke indentation, patched runtime.py. Never reverted, never left the test. Stuck, and worse. |
+| watcher | 466 | 462 | 18 | $0.94 | First words: "The system indicates that my last edit to visit_Output made the situation worse. I need to revert that change and then focus on test_empty_blocks." Reverted, ran pytest, confirmed 462, went to test_empty_blocks, tried one lexer edit (no effect). Then drifted back to visit_Output once, saw 466 again, reverted again to 462. Read whole files repeatedly; its context compacted. Followed the note; held the line it was given, no further gain. |
+| counter | 466 | 468 | 21 | $0.26 | Edited visit_Output six times in a row (revert, retry, revert, retry), got one variant that removed the passyield error, then spent the rest failing to match an Edit string. Never left the function. The note changed nothing. |
+
+Transcripts: evals/react/runs/wedge_bare_ep2_8/.
+
+**What this moment shows.** With the original model the unaided arm stays
+stuck, which the pilot's Haiku arm did not, so the note can now be
+credited or not. Here it can: the watcher arm is the only one that
+reverted the regression and left the function, and the only one that did
+not end worse than it started. It did not then find a bug, and once it
+drifted back to the same function. The counter's note, true but not about
+the problem, was read and ignored. The real cost is not the CLI's figure:
+$1.38 for the three arms, most of it the watcher arm's repeated whole-file
+reads.
+
+**Spend, second session.** OpenRouter $1.38 (three arms plus two
+one-line tests). CLI usage: 36 watcher looks over three sessions, plus
+the pilot pass's notes reused for the bare session; at the handover's
+rate about $1.80. About $3.20 in total. At the rate seen here the 24
+remaining arms (nine moments; on the three where the watcher was silent
+the watcher arm equals the nothing arm and is not run) cost about $11.
+
+**Spend, pilot.** About $3.50 of CLI usage in total for that session: four
 watcher passes over the pilot session (one Haiku, three Sonnet), the
 three continuation arms at about $0.45 each, and the first broken
 continuation run. Each further moment costs about $1.40 for its three

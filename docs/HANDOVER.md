@@ -1,4 +1,4 @@
-# Handover to a new session (2026-09-06, evening)
+# Handover to a new session (2026-09-06, late evening)
 
 Read this file first, then CLAUDE.md, then docs/SHAPE.md, then
 docs/REACTION.md. docs/DEEPDIVE.md is the audit that led here. Do not read
@@ -20,82 +20,79 @@ Automatic rules do not work. No counter, threshold, score curve, or
 filename decides whether a session is stuck, whether to speak, or what a
 label is. Judgment decides. CLAUDE.md rule one; a hook re-injects it.
 
-## What was done this session
+## Where things stand
 
-1. **The watcher reads what the AI did, not only what it said.**
-   evals/bench/watcher_session.py now renders tool calls and tool results
-   into its input, clipped head AND tail so the error at the bottom
-   survives; pins the task statement (reminders stripped) into every look;
-   marks its own earlier note when it comes back inside the next prompt;
-   accepts DK_SESSION_ID (the hooks' name) as well as DK_SESSION; treats a
-   reply with no JSON as a failure, not a silence; writes an empty verdict
-   on any failed look so nothing stale is injected; and can run through
-   the `claude` CLI with no API key (DK_BACKEND=cli, default model
-   claude-sonnet-5). Lookup (web search) stays off unless EXA_API_KEY is
-   set, and the reaction harness keeps it off.
-2. **The watcher is asked for the owner's sentence.** The prompt asks for
-   the fact the AI has not taken in, or the claim the record contradicts,
-   only when the AI would act differently for it; in Miles's register
-   (short, "you", the fact first, then the one check); never a question,
-   never encouragement, never a restatement of the last output; guesses
-   marked; no fetching from outside when a check on disk would do; never
-   mentioning its own notes.
-3. **The reaction harness exists** (evals/react/). build.py rebuilds a
-   moment's repo state by replaying the recorded tool calls from the
-   inspect log and checks it against the record; watch.py runs the watcher
-   look by look; run.py continues the same coding AI three ways (nothing /
-   watcher note / counter note) under the real hook path; show.py prints a
-   continuation for reading. docs/REACTION.md has the method and results.
-4. The pilot (wedge_bare_ep2_9) ran end to end. The rebuilt state matched
-   the record exactly. The Sonnet watcher named the reader's facts on
-   three independent passes. The AI followed the note to the letter. But
-   the unaided arm also changed course and went further: Haiku is not
-   stuck where gemini-2.5-flash was. See docs/REACTION.md. Two things
-   follow: the continuation model must be one that stays stuck (the
-   original model, via an OpenRouter key), and the seeded bugs must be
-   committed so `git diff`/`git checkout` cannot reveal or remove them.
+1. **All ten moments have a watcher note, or a judged silence.** One
+   Sonnet 5 pass per session, look by look (evals/react/notes/). Beside
+   the reader's sentence: 4 same, 3 partial (same problem, different next
+   step), 3 silent where the reader would speak. The table and the
+   reading are in docs/REACTION.md. Nothing was tuned.
+2. **The continuation now runs the original stuck model.** OpenRouter
+   serves gemini-2.5-flash in Anthropic's format; run.py's
+   `REACT_BACKEND=openrouter` points the Claude Code binary at it with a
+   minimal environment. Unaided, it stays stuck where Haiku did not.
+3. **One full moment on that model: wedge_bare_ep2_8.** nothing 466 to
+   539, watcher 466 to 462, counter 466 to 468. The watcher arm followed
+   the note (reverted the regression, left the function), the other two
+   never left it. Read docs/REACTION.md and the transcripts under
+   evals/react/runs/wedge_bare_ep2_8/ before repeating any sentence about
+   them.
+4. **The seeded bugs are committed before replay** (build.py). git diff
+   shows only the AI's edits. The AI's recorded git restore / reset
+   commands are pointed at the pristine commit during replay so the
+   rebuilt state stays as recorded; all nine rebuilds match their counts.
+5. **One session's original grader was broken** (goal-dk HE6z epoch 1:
+   wedge_dk_ep1_11/13/15/16). It said "no tests ran" every check, so the
+   driver's "785 failing" was false all session; the rebuilt states have
+   4, 22, 0 and 22 failing. Cause not found. Say this whenever those four
+   moments are discussed.
 
 ## What to do next, in order
 
-1. Read docs/REACTION.md for where the pilot and the ten-moment run stand.
-   Everything under evals/react/runs/ is a real transcript; read them
-   before trusting any sentence about them.
-2. Waiting on Miles: whether to run the remaining nine moments with
-   Haiku as is (cheap, likely to show "followed but not needed" again),
-   or with the original model through an OpenRouter key. Either way,
-   first commit the seeded bugs in build.reset_workdir() (git commit
-   after git apply) so the diff shows only the AI's edits; note that
-   changes state fidelity for moments where the original AI ran git
-   checkout, and say so.
-3. Then: `bash evals/react/build_all.sh`
-   checks every chosen moment's rebuild; then one watcher pass per session
-   (`watch.py` on the cccccccc-* transcripts under
-   ~/.claude/projects/-opt-jinja/, model claude-sonnet-5, DK_BACKEND=cli),
-   taking each moment's note from the look before its driver message; then
-   `run.py <moment> <arm> <note>` for the three arms. Read each with
-   show.py and write the verdict into REACTION.md.
-4. Then stop and ask Miles what next. Do not widen into the SWE or
+1. **Waiting on Miles:** the remaining 24 arms cost about $11 at the rate
+   seen (the watcher arm on ep2_8 alone was $0.94 because the model
+   re-reads whole files). Do not start them without his word. If he says
+   go: for each moment in evals/react/build_all.sh plus wedge_bare_ep2_9,
+   `REACT_BACKEND=openrouter REACT_MODEL=google/gemini-2.5-flash
+   python3 run.py <moment> <arm> notes/<moment>.<arm>.txt` (or `-` for
+   nothing). Arms are sequential (they share /opt/jinja). Skip the
+   watcher arm where notes/<moment>.watcher.txt is empty (healthy_dk_ep1_11,
+   wedge_dk_ep1_11, wedge_dk_ep1_13): it would equal the nothing arm.
+   Read each with show.py and write the verdict into REACTION.md.
+2. If Miles wants the watcher closer to his voice first: the gap is
+   length (50 to 70 words against his 20) and the HE6z silences (it
+   trusted the AI's local pytest over the driver's count and did not
+   raise the contradiction after look 6). Change the prompt only for a
+   reason you can point at in a transcript; then re-run the pass on that
+   one session (17 looks, about $0.85) and compare by reading.
+3. Then stop and ask Miles what next. Do not widen into the SWE or
    Terminal-Bench corpora: they need containers this environment has not
    got.
 
 ## Environment facts that cost time to rediscover
 
-- No OpenRouter key here. The only model access is the `claude` CLI on
-  Miles's login, which counts against his plan's usage cap. Ask before
-  anything beyond a few dollars' worth.
-- The auto-mode classifier blocks `--dangerously-skip-permissions` and
-  `--allowedTools` on the command line. Tool approval for the nested
-  agent is done through /opt/jinja/.claude/settings.json, and /opt/jinja
-  must be marked trusted in ~/.claude.json or the allow list is ignored.
-- /opt/jinja, /opt/jinja_pristine, /opt/pristine_tests and /opt/venv are
-  set up by hand (see REACTION.md); the recorded commands use those
-  absolute paths. Rebuilding wipes /opt/jinja, so build and run are
-  sequential; watcher passes read transcripts only and can run alongside.
-- The inspect .eval logs are zstd zips; evals/react/evallog.py reads them
-  without inspect_ai.
+- A fresh container has none of /opt. Rebuild: `python3 -m venv /opt/venv;
+  /opt/venv/bin/pip install pytest zstandard`; clone pallets/jinja at
+  3.1.2 to /opt/jinja_pristine; copy it to /opt/jinja and `pip install -e
+  /opt/jinja` FROM THAT PATH (an editable install of the pristine copy
+  makes every build report 0 failing); copy /opt/jinja/tests to
+  /opt/pristine_tests. `pip install zstandard` for evallog.py too. Check:
+  bugs applied in /opt/jinja give "785 failed, 57 passed".
+- OPENROUTER_API_KEY was present this session (about $27 of credit left
+  after this session's $1.38). The `claude` CLI on Miles's login is the
+  other model access and counts against his plan.
+- The nested Claude Code must run with a near-empty environment for the
+  openrouter backend, or it keeps the host OAuth and sends no auth header
+  (401 "Missing Authentication header"). run.py's nested_env() does this.
+- The CLI's total_cost_usd is wrong for foreign models (prices them at
+  Anthropic rates); run.py records real spend from OpenRouter's credits
+  endpoint as openrouter_spent_usd.
+- /opt/jinja must be trusted in ~/.claude.json or the allow list is
+  ignored; run.py's trust_workdir() sets it.
 - CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=80 and CLAUDE_ADDITIONAL_DIRECTORIES are
-  set in this session's environment and must be removed for the nested
-  agent, or its history is compacted and its edits are refused.
+  set in this session's environment and must not reach the nested agent.
+- Watcher passes read transcripts only and can run alongside a build;
+  builds and runs share /opt/jinja and must be sequential.
 
 ## What not to repeat
 
@@ -104,11 +101,13 @@ label is. Judgment decides. CLAUDE.md rule one; a hook re-injects it.
 - Do not run marathons or bench sweeps. They measured nothing four times.
 - Do not paste an untruncated note into docs; the notes are kept in full
   under evals/react/notes/ and runs/.
+- Do not trust the CLI's cost figure for a foreign model.
 
 ## House rules
 
-- Branch for this session: claude/dk-mode-watcher-alignment-ygndi3 (the
+- Branch for this session: claude/dk-mode-watcher-alignment-9he3xq (the
   previous branch's history was pulled into it). Never push elsewhere.
 - Run `bash tests/run_dk_tests.sh` before committing under scripts/ or
   tests/. Redact secrets. Commit trailers as in the repo's history.
 - Plain simple English to Miles. Numbers in a table, not in prose.
+- Tell Miles before spending more than $5.
