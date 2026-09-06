@@ -1,0 +1,3 @@
+<self-steering>
+You just swapped in a third, untested variant of the parse_tuple loop and guessed 'back to 14 failing' without running pytest - then output an unrelated JSON findings blob instead of testing. Run `python -m pytest tests -q` now and read the actual failed/passed count before claiming anything.
+</self-steering>

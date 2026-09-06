@@ -1,0 +1,3 @@
+<self-steering>
+You removed expect('rparen') from parse_primary but there's no edit showing you added it back inside parse_tuple - rparen may now be unconsumed anywhere. Run `python -m pytest tests -q` before making another change; you've stacked two edits without testing either.
+</self-steering>

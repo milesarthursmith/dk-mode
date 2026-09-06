@@ -38,6 +38,76 @@ fail and says "The goal stands. Continue."
 
 Every transcript is under evals/react/runs/<moment>/<arm>/.
 
+## Changes on 2026-09-06 (evening, second session)
+
+1. **The continuation runs the original model.** An OpenRouter key was
+   present this time. OpenRouter serves gemini-2.5-flash in Anthropic's
+   message format, so the same Claude Code binary is pointed at it
+   (`REACT_BACKEND=openrouter` in run.py, a minimal environment so the
+   binary cannot fall back to the host login). The first arm run this way
+   (wedge_bare_ep2_8, nothing) stayed stuck exactly where the record
+   shows the original stuck; Haiku had not. Real spend per arm is read
+   from OpenRouter's credits endpoint, because the CLI prices an unknown
+   model at Anthropic rates and reports about fifty times too much.
+2. **The seeded bugs are committed before replay.** `git diff` now shows
+   only the AI's edits and `git checkout <file>` cannot remove a bug. The
+   AI's recorded `git restore <file>` and `git reset --hard` commands are
+   pointed at the pristine commit during replay, so the rebuilt state
+   stays what the record shows. All nine rebuilds give the same failing
+   counts as before the change. One consequence to keep in mind when
+   reading: in the continuation, `git checkout -- lexer.py` now restores
+   the bugged lexer.py, where in the original it restored the clean one.
+3. **One session's original grader was broken.** In goal-dk HE6z epoch 1
+   (moments wedge_dk_ep1_11, _13, _15, _16) the scorer's own record says
+   "no tests ran" on every check after the first, so the driver's "785
+   failing (0% fixed)" was false for the whole session. The AI's local
+   pytest was the truth, and the reader's sentences for those moments
+   ("settle why the harness says 785 while your run says 842 passed")
+   were pointing at a harness fault nobody could fix from inside. The
+   rebuilt states here give the honest counts: 4, 22, 0 and 22 failing at
+   the four cuts. The driver prompt used for the continuation is still
+   the recorded one, so the AI meets the same contradiction the original
+   did. The cause of the grader fault was not found; the agent's own
+   commands do not touch tests/ or /opt/pristine_tests.
+
+## What the watcher said, moment by moment
+
+One Sonnet 5 pass per session (reasoning off, lookup off), look by look;
+the note for a moment is the look over exactly that prefix. Full text of
+every look is in evals/react/notes/*.looks.json; the delivered notes in
+notes/<moment>.watcher.txt. The reader's sentence is from
+evals/bench/labels/judgment.jsonl. "Same" means the note names the same
+problem and the same next step as the reader; "partial" the same problem,
+a different next step; "silent" the watcher chose not to speak.
+
+| moment | reader's next step | watcher's next step | judged |
+|---|---|---|---|
+| wedge_bare_ep2_7 | git diff compiler.py and revert; read the full traceback | stop touching visit_Output; re-read the file; fix test_empty_blocks instead | partial |
+| wedge_bare_ep2_8 | revert the compiler.py edits; run the one test with --tb=long | revert the last edit (462 to 466); confirm; fix test_empty_blocks | same |
+| wedge_bare_ep2_9 | print the code jinja generates; revert the last edit | revert the last edit; move to test_empty_blocks | partial |
+| wedge_dk_ep1_10 | git checkout -- lexer.py, stop rewriting by hand | git checkout -- lexer.py | same |
+| healthy_dk_ep1_11 | do not re-apply the lstrip_blocks change; run pytest, read the traceback | (silent: the AI had just run the restore it was told to run for eleven looks; the watcher waited one turn) | silent |
+| healthy_dk_ep2_6 | git checkout src/jinja2/; then fix the nodes.py == bug | your nodes.py fix is real, keep it; your last message is nonsense; run pytest --tb=short | same |
+| wedge_dk_ep1_11 | stop editing parse_tuple; reconcile harness 785 vs local 842 | (silent: local pytest went 14 to 10 to 4 failing, judged real progress) | silent |
+| wedge_dk_ep1_13 | same | (silent, same reason) | silent |
+| wedge_dk_ep1_15 | stop editing parse_tuple; resolve the contradiction | you swapped in an untested variant and guessed the count; run pytest before claiming | partial |
+| wedge_dk_ep1_16 | leave parse_tuple alone; restore the is_tuple_end fix you undid | you stacked two edits without testing; run pytest first | partial |
+
+Two things to say about the silences. On the HE6z session the watcher
+had, at look 3, worked out on its own that the AI's `git reset --hard`
+had erased uncommitted seeded bugs, and said so; by looks 11 to 14 its
+notes still carried "harness 785 vs local 4, unreconciled" but it judged
+the local progress real and stayed quiet. Miles's own line quoted in the
+prompt ("you said 842 passed. the harness says 785 failing. sort that
+out") comes from this session, so this is a real gap between the watcher
+and the owner, not a tie. It is left as found; nothing was tuned.
+
+On register: the notes lead with the fact, address the AI as "you", and
+give one check. They run 50 to 70 words where the owner would use 20,
+and sometimes explain ("because you're editing from a stale mental
+model"). The pilot note (ep2_9) opens by mentioning undelivered notes;
+the prompt has forbidden that since, and no later note does it.
+
 ## Caveats stated up front
 
 - The original stuck sessions were driven by gemini-2.5-flash inside the
