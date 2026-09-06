@@ -24,9 +24,12 @@ label is. Judgment decides. CLAUDE.md rule one; a hook re-injects it.
 
 1. **All ten moments have a watcher note, or a judged silence.** One
    Sonnet 5 pass per session, look by look (evals/react/notes/). Beside
-   the reader's sentence: 4 same, 3 partial (same problem, different next
-   step), 3 silent where the reader would speak. The table and the
-   reading are in docs/REACTION.md. Nothing was tuned.
+   the reader's sentence: 5 same, 2 partial (same problem, different next
+   step), 3 silent where the reader would speak. The bare session's pass
+   was redone through OpenRouter with the current prompt (the pilot's
+   predated one line of it); those notes are shorter and match the
+   reader on all three. The table and the reading are in
+   docs/REACTION.md. Nothing was tuned.
 2. **The continuation now runs the original stuck model.** OpenRouter
    serves gemini-2.5-flash in Anthropic's format; run.py's
    `REACT_BACKEND=openrouter` points the Claude Code binary at it with a
@@ -34,7 +37,9 @@ label is. Judgment decides. CLAUDE.md rule one; a hook re-injects it.
 3. **One full moment on that model: wedge_bare_ep2_8.** nothing 466 to
    539, watcher 466 to 462, counter 466 to 468. The watcher arm followed
    the note (reverted the regression, left the function), the other two
-   never left it. Read docs/REACTION.md and the transcripts under
+   never left it. The note it got was the pilot pass's (older prompt);
+   re-run that arm with notes/wedge_bare_ep2_8.watcher.txt as it now is
+   before counting it. Read docs/REACTION.md and the transcripts under
    evals/react/runs/wedge_bare_ep2_8/ before repeating any sentence about
    them.
 4. **The seeded bugs are committed before replay** (build.py). git diff
@@ -49,9 +54,10 @@ label is. Judgment decides. CLAUDE.md rule one; a hook re-injects it.
 
 ## What to do next, in order
 
-1. **Waiting on Miles:** the remaining 24 arms cost about $11 at the rate
-   seen (the watcher arm on ep2_8 alone was $0.94 because the model
-   re-reads whole files). Do not start them without his word. If he says
+1. **Waiting on Miles:** the remaining 24 arms plus the ep2_8 watcher
+   re-run cost about $12 at the rate seen (the watcher arm on ep2_8 alone
+   was $0.94 because the model re-reads whole files; compaction is now
+   off, which may raise that). Spent so far about $3.90. Do not start them without his word. If he says
    go: for each moment in evals/react/build_all.sh plus wedge_bare_ep2_9,
    `REACT_BACKEND=openrouter REACT_MODEL=google/gemini-2.5-flash
    python3 run.py <moment> <arm> notes/<moment>.<arm>.txt` (or `-` for
@@ -78,8 +84,10 @@ label is. Judgment decides. CLAUDE.md rule one; a hook re-injects it.
   makes every build report 0 failing); copy /opt/jinja/tests to
   /opt/pristine_tests. `pip install zstandard` for evallog.py too. Check:
   bugs applied in /opt/jinja give "785 failed, 57 passed".
-- OPENROUTER_API_KEY was present this session (about $27 of credit left
-  after this session's $1.38). The `claude` CLI on Miles's login is the
+- OPENROUTER_API_KEY was present this session (about $26 of credit left
+  after this session's $2.12). The watcher runs on it too:
+  `DK_BACKEND=openai DK_API_KEY=$OPENROUTER_API_KEY
+  DK_WATCH_MODELS=anthropic/claude-sonnet-5`, about $0.07 a look. The `claude` CLI on Miles's login is the
   other model access and counts against his plan.
 - The nested Claude Code must run with a near-empty environment for the
   openrouter backend, or it keeps the host OAuth and sends no auth header

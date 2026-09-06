@@ -83,9 +83,9 @@ a different next step; "silent" the watcher chose not to speak.
 
 | moment | reader's next step | watcher's next step | judged |
 |---|---|---|---|
-| wedge_bare_ep2_7 | git diff compiler.py and revert; read the full traceback | stop touching visit_Output; re-read the file; fix test_empty_blocks instead | partial |
-| wedge_bare_ep2_8 | revert the compiler.py edits; run the one test with --tb=long | revert the last edit (462 to 466); confirm; fix test_empty_blocks | same |
-| wedge_bare_ep2_9 | print the code jinja generates; revert the last edit | revert the last edit; move to test_empty_blocks | partial |
+| wedge_bare_ep2_7 | git diff compiler.py and revert; read the full traceback | your last edit never applied and you went idle; run the one test with --tb=long before editing compiler.py again | same |
+| wedge_bare_ep2_8 | revert the compiler.py edits; run the one test with --tb=long | your 'yield >' theory is wrong (item is the lineno arg); run the one test with --tb=long before editing compiler.py again | same |
+| wedge_bare_ep2_9 | print the code jinja generates; revert the last edit | 462 to 466, you made it worse; you have not run the one test with --tb=long after six instructions; run it now | same |
 | wedge_dk_ep1_10 | git checkout -- lexer.py, stop rewriting by hand | git checkout -- lexer.py | same |
 | healthy_dk_ep1_11 | do not re-apply the lstrip_blocks change; run pytest, read the traceback | (silent: the AI had just run the restore it was told to run for eleven looks; the watcher waited one turn) | silent |
 | healthy_dk_ep2_6 | git checkout src/jinja2/; then fix the nodes.py == bug | your nodes.py fix is real, keep it; your last message is nonsense; run pytest --tb=short | same |
@@ -93,6 +93,21 @@ a different next step; "silent" the watcher chose not to speak.
 | wedge_dk_ep1_13 | same | (silent, same reason) | silent |
 | wedge_dk_ep1_15 | stop editing parse_tuple; resolve the contradiction | you swapped in an untested variant and guessed the count; run pytest before claiming | partial |
 | wedge_dk_ep1_16 | leave parse_tuple alone; restore the is_tuple_end fix you undid | you stacked two edits without testing; run pytest first | partial |
+
+The bare session's pass was run twice. The pilot's pass (Sonnet 5 via the
+CLI) predates the "never mention your notes" line, which was added after
+reading its output and committed with it; the ep2_8 arms below used its
+look-9 note. The second pass (Sonnet 5 via OpenRouter, current prompt,
+notes/session_bare_ep2_Yn5R.looks.json) is the one in the table. Its
+notes are shorter (40 to 60 words against 60 to 75), lead with the fact,
+and give one command; on all three bare moments that command is the
+reader's own (run the one failing test with a long traceback). It also
+found a fact no reader wrote down: in `writeline("yield ", item)` the
+second argument is the line-number node, not output text, so the AI's
+whole "yield >" theory was wrong. Two of its ten looks ask the AI to
+"paste the traceback", which the prompt forbids; left as found. The
+ep2_8 watcher arm should be re-run with this pass's note before it
+counts.
 
 Two things to say about the silences. On the HE6z session the watcher
 had, at look 3, worked out on its own that the AI's `git reset --hard`
@@ -213,12 +228,14 @@ the problem, was read and ignored. The real cost is not the CLI's figure:
 $1.38 for the three arms, most of it the watcher arm's repeated whole-file
 reads.
 
-**Spend, second session.** OpenRouter $1.38 (three arms plus two
-one-line tests). CLI usage: 36 watcher looks over three sessions, plus
-the pilot pass's notes reused for the bare session; at the handover's
-rate about $1.80. About $3.20 in total. At the rate seen here the 24
-remaining arms (nine moments; on the three where the watcher was silent
-the watcher arm equals the nothing arm and is not run) cost about $11.
+**Spend, second session.** OpenRouter $2.12: three arms $1.38, the bare
+session's second watcher pass $0.74 (ten Sonnet 5 looks, about $0.07 a
+look). CLI usage: 36 watcher looks over three sessions on Miles's plan,
+about $1.80 at the handover's rate. About $3.90 in total. At the rates
+seen, the 24 remaining arms plus the ep2_8 watcher re-run cost about
+$12; the three other sessions' passes could be re-run through OpenRouter
+for about $2.50 if their CLI-made notes are to be replaced by same-route
+ones.
 
 **Spend, pilot.** About $3.50 of CLI usage in total for that session: four
 watcher passes over the pilot session (one Haiku, three Sonnet), the

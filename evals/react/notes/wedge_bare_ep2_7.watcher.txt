@@ -1,3 +1,3 @@
 <self-steering>
-41% fixed for 8 straight checks. Your last Edit call failed outright ('string not found') because you're editing from a stale mental model of compiler.py, not the actual file - and you didn't even rerun pytest after. Stop touching visit_Output/_output_const_repr. Re-read compiler.py fresh, then go fix test_empty_blocks (assert '>' == '<>'), a completely different bug you already saw.
+7 checks in a row stuck at 41% fixed — nothing you've done to compiler.py has helped. Your last edit failed outright ('String to replace not found in file'), never applied, and you went idle instead of fixing it. Run pytest tests -k test_item_and_attribute --tb=long now and read the actual traceback before editing compiler.py again.
 </self-steering>
