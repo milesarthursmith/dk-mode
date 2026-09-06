@@ -40,9 +40,11 @@ the answer is a plain explanation, not a restatement.
 - Product spec: docs/SHAPE.md (non-negotiable). Vocabulary: watcher,
   senses, notes/expectations, intervention, lookup, guard (retired).
 - Experiment log: docs/log.md. Append; do not rewrite history.
-- Watcher prototype: evals/bench/watcher_session.py. Judge/watcher
-  runs must use reasoning on (DK_REASONING=high). A judge without
-  reasoning is not a judge.
+- Watcher prototype: evals/bench/watcher_session.py. Reasoning
+  (DK_REASONING=high) was assumed necessary for a judge; the one paired
+  run (docs/log.md 2026-09-05) found it made the watcher quieter, not
+  sharper. Treat reasoning as an open bench variable, state which
+  setting a run used, and never call a no-reasoning run "the judge".
 - Replay bench: evals/bench/replay_bench.py. Errors (sub-5s or failed
   HTTP calls) are excluded and retried, never counted as verdicts.
 - Spend discipline and kill criteria: docs/SHAPE.md. Never launch a
