@@ -79,17 +79,21 @@ def nested_env():
     not leak into it: the extra directory list and the lowered
     auto-compaction threshold. For openrouter, start from nothing, or the
     binary keeps the host login and sends no auth header at all."""
+    # The original sessions never compacted (0 of 318 messages in the
+    # longest); the first watcher arm here did, once, after four whole-file
+    # reads. Compaction is off so the AI keeps the note and the record.
     if BACKEND == "openrouter":
         env = {"HOME": os.path.expanduser("~"), "PATH": build.ENV["PATH"],
                "ANTHROPIC_BASE_URL": "https://openrouter.ai/api",
                "ANTHROPIC_AUTH_TOKEN": os.environ["OPENROUTER_API_KEY"],
+               "DISABLE_AUTO_COMPACT": "1",
                "DISABLE_TELEMETRY": "1", "LANG": os.environ.get("LANG", "C.UTF-8")}
         for k in ("HTTPS_PROXY", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE",
                   "REQUESTS_CA_BUNDLE", "PIP_CERT", "GIT_SSL_CAINFO"):
             if os.environ.get(k):
                 env[k] = os.environ[k]
         return env
-    env = dict(build.ENV)
+    env = dict(build.ENV, DISABLE_AUTO_COMPACT="1")
     for k in ("CLAUDE_ADDITIONAL_DIRECTORIES", "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD",
               "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE"):
         env.pop(k, None)

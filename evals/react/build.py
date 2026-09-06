@@ -126,8 +126,12 @@ def as_recorded(cmd, pristine):
     if m:
         return f"git reset --hard {pristine}"
     m = GIT_RESTORE.match(cmd)
-    if m and not m.group(2).strip().startswith("-"):
-        return f"git checkout {pristine} -- {m.group(2).strip()}"
+    if m:
+        paths = m.group(2).strip()
+        if paths.startswith("-- "):
+            paths = paths[3:].strip()
+        if paths and not paths.startswith("-"):
+            return f"git checkout {pristine} -- {paths}"
     return cmd
 
 
