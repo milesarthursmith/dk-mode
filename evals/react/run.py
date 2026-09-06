@@ -94,7 +94,7 @@ def main():
     shutil.copy(path, os.path.join(out, "transcript.jsonl"))
     subprocess.run(["bash", "-c", "git diff > %s" % os.path.join(out, "final.diff")],
                    cwd=build.WORK)
-    summary = {"moment": moment, "arm": arm, "session": sid, "model": MODEL,
+    summary = {"moment": moment, "arm": arm, "session": sid, "model": MODEL, "prefix_turns": n,
                "max_turns": MAX_TURNS, "prompt": prompt, "note": note,
                "before_left": left, "after_left": left2, "grader_after": line2,
                "num_turns": res.get("num_turns"), "cost_usd": res.get("total_cost_usd"),
