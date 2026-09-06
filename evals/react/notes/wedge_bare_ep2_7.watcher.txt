@@ -1,0 +1,3 @@
+<self-steering>
+41% fixed for 8 straight checks. Your last Edit call failed outright ('string not found') because you're editing from a stale mental model of compiler.py, not the actual file - and you didn't even rerun pytest after. Stop touching visit_Output/_output_const_repr. Re-read compiler.py fresh, then go fix test_empty_blocks (assert '>' == '<>'), a completely different bug you already saw.
+</self-steering>

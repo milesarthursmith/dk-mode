@@ -93,11 +93,42 @@ def locate(moment):
 
 
 def reset_workdir():
+    """Seeded state. The bugs are COMMITTED (2026-09-06): in the original runs
+    they were an uncommitted diff, so `git diff` listed them and `git
+    checkout <file>` removed them, and the pilot's counter arm gained most of
+    its ground that way. With them committed, the AI's own edits are the
+    only diff. Returns the pristine (unbugged) commit, which replay() uses
+    to keep the original meaning of the AI's git restore / reset commands."""
     shutil.rmtree(WORK, ignore_errors=True)
     shutil.copytree(PRISTINE, WORK)
     subprocess.run(["git", "config", "user.email", "eval@local"], cwd=WORK, check=True)
     subprocess.run(["git", "config", "user.name", "eval"], cwd=WORK, check=True)
+    pristine = subprocess.run(["git", "rev-parse", "HEAD"], cwd=WORK, check=True,
+                              capture_output=True, text=True).stdout.strip()
     subprocess.run(["git", "apply", BUGS], cwd=WORK, check=True)
+    subprocess.run(["git", "commit", "-qam", "seeded bugs"], cwd=WORK, check=True)
+    return pristine
+
+
+GIT_RESTORE = re.compile(r"^\s*git\s+(restore|checkout)\s+(?!.*\b-b\b)(.+)$")
+GIT_RESET = re.compile(r"^\s*git\s+reset\s+--hard\s*$")
+
+
+def as_recorded(cmd, pristine):
+    """In the original runs `git restore <f>` and `git reset --hard` went back
+    to the UNBUGGED tree (the bugs were uncommitted). With the bugs now
+    committed, the same commands would go back to the bugged tree, so the
+    replay points them at the pristine commit instead. State fidelity first;
+    what the continuation's git shows is a separate, stated caveat."""
+    if not pristine:
+        return cmd
+    m = GIT_RESET.match(cmd)
+    if m:
+        return f"git reset --hard {pristine}"
+    m = GIT_RESTORE.match(cmd)
+    if m and not m.group(2).strip().startswith("-"):
+        return f"git checkout {pristine} -- {m.group(2).strip()}"
+    return cmd
 
 
 NETWORK = ("Retrying (Retry(", "Could not find a version", "Network is unreachable",
@@ -125,7 +156,7 @@ def apply_edit(args):
     return True, "edited"
 
 
-def replay(msgs, cut, say):
+def replay(msgs, cut, say, pristine=None):
     results = {m.get("tool_call_id"): m for m in msgs if m["role"] == "tool"}
     mism, n_run = [], 0
     for m in msgs[:cut]:
@@ -142,8 +173,11 @@ def replay(msgs, cut, say):
                 if "pytest" in cmd and not STATE_WORDS.search(cmd):
                     say(f"  skip (test run, changes nothing): {cmd[:80]!r}")
                     continue
+                run_cmd = as_recorded(cmd, pristine)
+                if run_cmd != cmd:
+                    say(f"  git, pointed at the pristine commit as in the original: {cmd[:80]!r}")
                 try:
-                    r = subprocess.run(["bash", "-c", cmd], cwd=WORK, env=ENV,
+                    r = subprocess.run(["bash", "-c", run_cmd], cwd=WORK, env=ENV,
                                        capture_output=True, text=True, timeout=240)
                     ok = r.returncode == 0
                 except subprocess.TimeoutExpired:
@@ -272,8 +306,8 @@ def main():
     say = lambda s: print(s, flush=True)
     key, msgs, cut = locate(moment)
     say(f"{moment}: {key[0][:45]} epoch {key[1]}, cut at message {cut} of {len(msgs)}")
-    reset_workdir()
-    n_run, mism = replay(msgs, cut, say)
+    pristine = reset_workdir()
+    n_run, mism = replay(msgs, cut, say, pristine)
     say(f"replayed {n_run} state-changing calls; {len(mism)} outcome mismatches")
     for x in mism:
         say("  MISMATCH " + x)
