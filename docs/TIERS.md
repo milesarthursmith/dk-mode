@@ -151,4 +151,56 @@ reading task and the material is already on disk.
 
 ## Alert quality result
 
-(pending: filled in when labels/alert_quality.jsonl is complete)
+A second reader compared every watcher alert with what the first reader
+said should be said, opening the transcript where needed
+(labels/alert_quality.jsonl, one verdict and reason per item).
+
+Of the 48 fires on speak-moments:
+
+    same problem named       24    the alert is a fair substitute for a human's
+    partial                  20    right area, misses the fact one level down
+    wrong                     4    asserts a diagnosis that inverts the truth
+    different but valid       0
+
+Of the 22 fires on silent-moments (second read of the transcript):
+
+    first reader right       14    false alarm
+    watcher right             2    the first reader excused a real loop
+    unclear                   6
+
+What this says, and what "fired or not" could never say:
+
+- The watcher is a fair human substitute on one shape of wedge only: a
+  single recurring tool error (the same make error, the same edit
+  failing on the same string, seven rewrites of one file). All 24
+  "same" verdicts are of that kind.
+- It seldom sees the cause behind the repetition. The 20 partials are
+  where the reader named the fact one level deeper: a tab in the
+  string being matched, an edit that renames nothing, a blank image
+  behind the empty OCR, a rendered scene behind the curve-fitting. The
+  watcher's advice in those cases ("re-read the file and copy exactly",
+  "get tesseract to produce output") keeps the agent inside the loop.
+- When it speculates it can invert the truth. All four "wrong" alerts
+  assert a diagnosis (environment problem, harness misbehaving) rather
+  than naming the loop.
+- Most false alarms are restatements of the last tool output or the
+  agent's own stated next step. It also fires on prompt-induced verbal
+  tics ("I have not verified") as if they were unproven claims.
+- It never widened the frame. No alert questioned task compliance (a
+  test file edited, an interpreter file edited against the task's
+  rule) or noticed that a session had produced a correct artifact and
+  then abandoned it. That is where a human overseer's value is highest
+  and the watcher contributed nothing.
+
+So the honest tier-1 number is not 48 of 78. It is 24 of 78 alerts that
+a human would have been content to have sent, and 0 of 78 that did the
+overseer's highest-value job. The counter baseline, by construction,
+names the repetition and nothing else; on the 24 it is roughly the
+watcher's equal, and on the 20 partials the watcher's extra words did
+not help. Detection rate flattered the watcher. The gap to the human is
+in what it says, and the bench as designed could not see it.
+
+Second-reader agreement, first measurement: on the 22 disagreements
+between watcher and first reader, the second reader sided with the
+first on 14, the watcher on 2, and could not decide on 6. That is the
+error bar the label set has been missing.

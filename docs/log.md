@@ -21,8 +21,14 @@ rejected design (stateless dk_watch, counter tripwire), has zero tests
 for watcher_session.py, and cannot see judgment because every model is
 a canned mock. Fixed test 55, added CI, added the run-before-commit
 rule to CLAUDE.md. Reasoning-on watcher: worse (docs/log.md 09-05).
-Alert-quality reading (does the watcher's alert name the problem the
-reader saw) in progress; result goes into TIERS.md.
+Alert quality, by a second reader (labels/alert_quality.jsonl): of 48
+fires on speak-moments, 24 name the same problem the reader saw, 20
+are partial (miss the cause one level down), 4 are wrong (assert an
+inverted diagnosis). Of 22 fires on silent-moments, 14 false alarm, 2
+watcher right, 6 unclear. The watcher matches a human only on
+single-recurring-error wedges; it never widened the frame (task
+compliance, abandoned correct work). Honest tier-1 number: 24/78, not
+48/78. Full reading in docs/TIERS.md.
 
 ## 2026-09-05 — judgment labels replace the automatic ones; the watcher now beats the counter
 
