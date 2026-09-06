@@ -46,23 +46,35 @@ label is. Judgment decides. CLAUDE.md rule one; a hook re-injects it.
    look by look; run.py continues the same coding AI three ways (nothing /
    watcher note / counter note) under the real hook path; show.py prints a
    continuation for reading. docs/REACTION.md has the method and results.
-4. On the pilot moment (wedge_bare_ep2_9) the rebuilt state matched the
-   record exactly (466 failing, 0 edit mismatches) and the Sonnet watcher
-   named the same facts as the reader on three independent passes.
+4. The pilot (wedge_bare_ep2_9) ran end to end. The rebuilt state matched
+   the record exactly. The Sonnet watcher named the reader's facts on
+   three independent passes. The AI followed the note to the letter. But
+   the unaided arm also changed course and went further: Haiku is not
+   stuck where gemini-2.5-flash was. See docs/REACTION.md. Two things
+   follow: the continuation model must be one that stays stuck (the
+   original model, via an OpenRouter key), and the seeded bugs must be
+   committed so `git diff`/`git checkout` cannot reveal or remove them.
 
 ## What to do next, in order
 
 1. Read docs/REACTION.md for where the pilot and the ten-moment run stand.
    Everything under evals/react/runs/ is a real transcript; read them
    before trusting any sentence about them.
-2. If the ten-moment run is not finished: `bash evals/react/build_all.sh`
+2. Waiting on Miles: whether to run the remaining nine moments with
+   Haiku as is (cheap, likely to show "followed but not needed" again),
+   or with the original model through an OpenRouter key. Either way,
+   first commit the seeded bugs in build.reset_workdir() (git commit
+   after git apply) so the diff shows only the AI's edits; note that
+   changes state fidelity for moments where the original AI ran git
+   checkout, and say so.
+3. Then: `bash evals/react/build_all.sh`
    checks every chosen moment's rebuild; then one watcher pass per session
    (`watch.py` on the cccccccc-* transcripts under
    ~/.claude/projects/-opt-jinja/, model claude-sonnet-5, DK_BACKEND=cli),
    taking each moment's note from the look before its driver message; then
    `run.py <moment> <arm> <note>` for the three arms. Read each with
    show.py and write the verdict into REACTION.md.
-3. Then stop and ask Miles what next. Do not widen into the SWE or
+4. Then stop and ask Miles what next. Do not widen into the SWE or
    Terminal-Bench corpora: they need containers this environment has not
    got.
 

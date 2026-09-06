@@ -1,0 +1,18 @@
+{
+ "moment": "wedge_bare_ep2_9",
+ "arm": "counter",
+ "session": "0178b55f-535b-4fbe-a620-510eb7336aae",
+ "model": "claude-haiku-4-5-20251001",
+ "prefix_turns": 192,
+ "max_turns": "20",
+ "prompt": "466 of the test cases are still failing (41% fixed). The goal stands: make the entire test suite pass. Continue.",
+ "note": "notes/wedge_bare_ep2_9.counter.txt",
+ "before_left": 466,
+ "after_left": 324,
+ "grader_after": "324 failed, 518 passed, 5 errors in 12.54s",
+ "num_turns": 21,
+ "cost_usd": 0.45200409999999985,
+ "secs": 95,
+ "exit": 1,
+ "result_tail": ""
+}

@@ -83,5 +83,34 @@ response requested....')" - a harness artifact, not the problem.
 | arm | failing before | failing after | what it did (read the transcript) |
 |---|---|---|---|
 | nothing | 466 | 219 | Ran one failing test verbosely, printed the generated code, found the inverted `if node.node is None` in `visit_Filter`, fixed it, then found and fixed the lexer dropping template data. Changed course on its own. |
-| watcher | 466 | (running) | |
-| counter | 466 | (running) | |
+| watcher | 466 | 322 | First words: "The user's note is correct." Reverted the `visit_Output` regression, ran pytest, went to `test_empty_blocks` as told, found the lexer `#bygroup` bug that dropped the leading data token, then a parser `nodes.If` bug. Followed the note to the letter. |
+| counter | 466 | 324 | "The system message indicates I need to change my strategy." Ran one test, printed the generated code, then `git diff` and `git checkout src/jinja2/compiler.py`, which removed the seeded bugs in that file along with its own edits, then fixed inversions it saw in the diff of lexer.py and parser.py. Changed course, partly by wiping the file. |
+
+All three transcripts: evals/react/runs/wedge_bare_ep2_9/.
+
+**What the pilot shows.**
+
+1. Delivery and voice work. The AI read the note as a person's message
+   ("The user's note is correct") and did exactly what it said. The
+   watcher's facts were the reader's facts.
+2. This moment cannot credit the note. Haiku 4.5, given nothing but the
+   driver's line, also changed course, and went further. The original
+   session was stuck because gemini-2.5-flash was stuck; a different
+   model dropped into the same state is not. A reaction check that can
+   say "the note made the difference" needs a continuation model that
+   stays stuck without it. That is the original model, which needs the
+   OpenRouter key this environment does not have, or moments where Haiku
+   is shown to stay stuck unaided.
+3. The instrument leaks the answer. The seeded bugs are uncommitted, so
+   `git diff` lists them and `git checkout <file>` removes them. The
+   counter arm gained most of its ground that way. The nothing arm read
+   the same diff and called the seeded inversions "my changes". Any
+   further runs on this corpus should commit the seeded bugs first, so
+   the AI's own edits are the only diff.
+
+**Spend.** About $3.50 of CLI usage in total for this session: four
+watcher passes over the pilot session (one Haiku, three Sonnet), the
+three continuation arms at about $0.45 each, and the first broken
+continuation run. Each further moment costs about $1.40 for its three
+arms plus a share of one Sonnet watcher pass per session (about $0.05 a
+look, 36 looks across the three remaining sessions).

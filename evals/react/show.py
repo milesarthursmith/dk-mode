@@ -25,7 +25,7 @@ def main():
           f"{summ['num_turns']} turns, ${summ['cost_usd']:.2f})")
     note = summ.get("note")
     if note and note != "-":
-        print("NOTE INJECTED:", open(note).read().strip().replace("<self-steering>", "").replace("</self-steering>", "").strip())
+        print("NOTE INJECTED:", open(os.path.join(d, "note.txt")).read().strip().replace("<self-steering>", "").replace("</self-steering>", "").strip())
     print()
     if start is None:
         print("(resume point not found)")
