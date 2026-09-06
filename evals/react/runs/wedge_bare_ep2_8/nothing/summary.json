@@ -1,0 +1,20 @@
+{
+ "moment": "wedge_bare_ep2_8",
+ "arm": "nothing",
+ "session": "b61c1e08-76bb-4d78-a16c-917c8e0a6b14",
+ "model": "google/gemini-2.5-flash",
+ "backend": "openrouter",
+ "prefix_turns": 188,
+ "max_turns": "20",
+ "prompt": "466 of the test cases are still failing (41% fixed). The goal stands: make the entire test suite pass. Continue.",
+ "note": "-",
+ "before_left": 466,
+ "after_left": 539,
+ "grader_after": "539 failed, 303 passed in 19.50s",
+ "num_turns": 21,
+ "cost_usd": 8.979846,
+ "openrouter_spent_usd": 0.1712,
+ "secs": 257,
+ "exit": 1,
+ "result_tail": ""
+}

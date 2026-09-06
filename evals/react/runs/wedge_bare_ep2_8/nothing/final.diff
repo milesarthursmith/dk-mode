@@ -1,0 +1,328 @@
+diff --git a/src/jinja2/compiler.py b/src/jinja2/compiler.py
+index 0c49d19..0e6b633 100644
+--- a/src/jinja2/compiler.py
++++ b/src/jinja2/compiler.py
+@@ -444,9 +444,11 @@ class CodeGenerator(NodeVisitor):
+         is no buffer a dummy ``if 0: yield None`` is written automatically.
+         """
+         try:
+-            self.writeline("pass")
++            initial_stream_pos = self.stream.tell()
+             for node in nodes:
+                 self.visit(node, frame)
++            if self.stream.tell() == initial_stream_pos:
++                self.writeline("pass")
+         except CompilerExit:
+             pass
+ 
+@@ -1426,7 +1428,8 @@ class CodeGenerator(NodeVisitor):
+         child nodes, produce a string to write to the template module
+         source.
+         """
+-        return repr(concat(group))
++        # the list is then wrapped into a repr() to become a Python string literal
++        return repr(concat(map(str, group)))
+ 
+     def _output_child_to_const(
+         self, node: nodes.Expr, frame: Frame, finalize: _FinalizeInfo
+@@ -1438,10 +1441,13 @@ class CodeGenerator(NodeVisitor):
+         will be evaluated at runtime. Any other exception will also be
+         evaluated at runtime for easier debugging.
+         """
+-        const = node.as_const(frame.eval_ctx)
++        try:
++            const = node.as_const(frame.eval_ctx)
++        except nodes.Impossible:
++            return _PassArg
+ 
+         if frame.eval_ctx.autoescape:
+-            const = escape(const)
++            const = str(escape(str(const)))
+ 
+         # Template data doesn't go through finalize.
+         if isinstance(node, nodes.TemplateData):
+@@ -1536,17 +1542,27 @@ class CodeGenerator(NodeVisitor):
+                     self.writeline(val + ",")
+             else:
+                 if frame.buffer is None:
+-                    self.writeline("yield ", item)
+-                else:
+-                    self.newline(item)
+-
+-                # A node to be evaluated at runtime.
+-                self._output_child_pre(item, frame, finalize)
+-                self.visit(item, frame)
+-                self._output_child_post(item, frame, finalize)
+-
+-                if frame.buffer is not None:
+-                    self.write(",")
++                    self.write("yield ")
++                    try:
++                        const_item = item.as_const(frame.eval_ctx)
++                    except nodes.Impossible:
++                        const_item = _PassArg
++
++                    if const_item is not _PassArg and const_item is not None:
++                        self.write(repr(const_item))
++                        self.newline()
++                    else:
++                        # If it's a runtime expression or None, always generate str() for safety
++                        self.write("str(")
++                        self._output_child_pre(item, frame, finalize)
++                        self.visit(item, frame)
++                        self._output_child_post(item, frame, finalize)
++                        self.write(")\n")
++                    self.visit(item, frame)
++                    self._output_child_post(item, frame, finalize)
++                    self.write(")")
++                    if frame.buffer is not None:
++                        self.write(",")
+ 
+         if frame.buffer is not None:
+             self.outdent()
+diff --git a/src/jinja2/lexer.py b/src/jinja2/lexer.py
+index 37a1fcc..80bfd0a 100644
+--- a/src/jinja2/lexer.py
++++ b/src/jinja2/lexer.py
+@@ -280,7 +280,7 @@ class Token(t.NamedTuple):
+         # here we do a regular string equality check as test_any is usually
+         # passed an iterable of not interned strings.
+         if self.type == expr:
+-            return False
++            return True
+ 
+         if ":" in expr:
+             return expr.split(":", 1) == [self.type, self.value]
+@@ -634,8 +634,6 @@ class Lexer:
+                 continue
+             elif token == TOKEN_DATA:
+                 value = self._normalize_newlines(value_str)
+-            elif token == "keyword":
+-                token = value_str
+             elif token == TOKEN_NAME:
+                 value = value_str
+ 
+@@ -704,7 +702,7 @@ class Lexer:
+                 m = regex.match(source, pos)
+ 
+                 # if no match we try again with the next rule
+-                if m is None:
++                if m is None or (not m.group() and new_state is None):
+                     continue
+ 
+                 # we only match blocks and variables if braces / parentheses
+@@ -718,73 +716,67 @@ class Lexer:
+                 ):
+                     continue
+ 
+-                # tuples support more options
++                # if multiple tokens are returned, process them
+                 if isinstance(tokens, tuple):
+                     groups: t.Sequence[str] = m.groups()
+ 
+                     if isinstance(tokens, OptionalLStrip):
+-                        # Rule supports lstrip. Match will look like
+-                        # text, block type, whitespace control, type, control, ...
+                         text = groups[0]
+-                        # Skipping the text and first type, every other group is the
+-                        # whitespace control for each type. One of the groups will be
+-                        # -, +, or empty string instead of None.
+                         strip_sign = next(g for g in groups[2::2] if g is not None)
++                        stripped_groups = None
+ 
+                         if strip_sign == "-":
+-                            # Strip all whitespace between the text and the tag.
+                             stripped = text.rstrip()
+                             newlines_stripped = text[len(stripped) :].count("\n")
+-                            groups = [stripped, *groups[1:]]
++                            stripped_groups = [stripped, *groups[1:]]
+                         elif (
+-                            # Not marked for preserving whitespace.
+                             strip_sign != "+"
+-                            # lstrip is enabled.
+                             and self.lstrip_blocks
+-                            # Not a variable expression.
+                             and not m.groupdict().get(TOKEN_VARIABLE_BEGIN)
+                         ):
+-                            # The start of text between the last newline and the tag.
+                             l_pos = text.rfind("\n") + 1
+ 
+                             if l_pos > 0 or line_starting:
+-                                # If there's only whitespace between the newline and the
+-                                # tag, strip it.
+                                 if whitespace_re.fullmatch(text, l_pos):
+-                                    groups = [text[:l_pos], *groups[1:]]
+-
+-                    for idx, token in enumerate(tokens):
+-                        # failure group
+-                        if token.__class__ is Failure:
+-                            raise token(lineno, filename)
+-                        # bygroup is a bit more complex, in that case we
+-                        # yield for the current token the first named
+-                        # group that matched
+-                        elif token == "#bygroup":
+-                            for key, value in m.groupdict().items():
+-                                if value is not None:
+-                                    yield lineno, key, value
+-                                    lineno += value.count("\n")
+-                                    break
+-                            else:
+-                                raise RuntimeError(
+-                                    f"{regex!r} wanted to resolve the token dynamically"
+-                                    " but no group matched"
+-                                )
+-                        # normal group
++                                    stripped_groups = [text[:l_pos], *groups[1:]]
++                        if stripped_groups is not None:
++                            groups = stripped_groups
++
++                    if "#bygroup" in tokens:
++                        for key, value in m.groupdict().items():
++                            if value is not None:
++                                yield lineno, key, value
++                                lineno += value.count("\n")
++                                break
+                         else:
+-                            data = groups[idx]
++                            raise RuntimeError(
++                                f"{regex!r} wanted to resolve the token dynamically"
++                                " but no group matched"
++                            )
++                    else:
++                        for idx, token in enumerate(tokens):
++                            if token.__class__ is Failure:
++                                raise token(lineno, filename)
++                            else:
++                                data = groups[idx]
+ 
+-                            if data or token not in ignore_if_empty:
+-                                yield lineno, token, data
++                                if data or token not in ignore_if_empty:
++                                    yield lineno, token, data
+ 
+-                            lineno += data.count("\n") + newlines_stripped
+-                            newlines_stripped = 0
++                                lineno += data.count("\n") + newlines_stripped
++                                newlines_stripped = 0
+ 
+-                # strings as token just are yielded as it.
++                # single token (not a tuple)
+                 else:
+                     data = m.group()
+ 
++                    # Check for empty matches that don't consume characters
++                    if not data and new_state is None and tokens not in ignore_if_empty:
++                        raise RuntimeError(
++                            f"{regex!r} yielded empty string for token {tokens!r}"
++                            " without state change - this may cause an infinite loop"
++                        )
++
+                     # update brace/parentheses balance
+                     if tokens != TOKEN_OPERATOR:
+                         if data == "{":
+@@ -809,7 +801,6 @@ class Lexer:
+                                     filename,
+                                 )
+ 
+-                    # yield items
+                     if data or tokens not in ignore_if_empty:
+                         yield lineno, tokens, data
+ 
+@@ -845,7 +836,7 @@ class Lexer:
+                 # we are still at the same position and no stack change.
+                 # this means a loop without break condition, avoid that and
+                 # raise error
+-                elif pos2 != pos:
++                elif pos2 == pos and new_state is None:
+                     raise RuntimeError(
+                         f"{regex!r} yielded empty string without stack change"
+                     )
+diff --git a/src/jinja2/nodes.py b/src/jinja2/nodes.py
+index dc7161c..c4d18eb 100644
+--- a/src/jinja2/nodes.py
++++ b/src/jinja2/nodes.py
+@@ -128,15 +128,18 @@ class Node(metaclass=NodeType):
+         if self.abstract:
+             raise TypeError("abstract nodes are not instantiable")
+         if fields:
+-            if len(fields) == len(self.fields):
+-                if not self.fields:
+-                    raise TypeError(f"{type(self).__name__!r} takes 0 arguments")
++            if len(fields) != len(self.fields):
+                 raise TypeError(
+-                    f"{type(self).__name__!r} takes 0 or {len(self.fields)}"
+-                    f" argument{'s' if len(self.fields) != 1 else ''}"
++                    f"{type(self).__name__!r} takes {len(self.fields)} argument(s)"
++                    f" but {len(fields)} given"
+                 )
+             for name, arg in zip(self.fields, fields):
+                 setattr(self, name, arg)
++        elif self.fields:
++            raise TypeError(
++                f"{type(self).__name__!r} takes {len(self.fields)} argument(s)"
++                f" but 0 given"
++            )
+         for attr in self.attributes:
+             setattr(self, attr, attributes.pop(attr, None))
+         if attributes:
+diff --git a/src/jinja2/parser.py b/src/jinja2/parser.py
+index 623b631..5acccbe 100644
+--- a/src/jinja2/parser.py
++++ b/src/jinja2/parser.py
+@@ -322,7 +322,7 @@ class Parser:
+         return node
+ 
+     def parse_extends(self) -> nodes.Extends:
+-        node = nodes.Extends(lineno=next(self.stream).lineno)
++        node = nodes.Extends(None, lineno=next(self.stream).lineno)
+         node.template = self.parse_expression()
+         return node
+ 
+@@ -339,7 +339,7 @@ class Parser:
+         return node
+ 
+     def parse_include(self) -> nodes.Include:
+-        node = nodes.Include(lineno=next(self.stream).lineno)
++        node = nodes.Include(None, None, None, lineno=next(self.stream).lineno)
+         node.template = self.parse_expression()
+         if self.stream.current.test("name:ignore") and self.stream.look().test(
+             "name:missing"
+@@ -351,14 +351,14 @@ class Parser:
+         return self.parse_import_context(node, True)
+ 
+     def parse_import(self) -> nodes.Import:
+-        node = nodes.Import(lineno=next(self.stream).lineno)
++        node = nodes.Import(None, None, None, lineno=next(self.stream).lineno)
+         node.template = self.parse_expression()
+         self.stream.expect("name:as")
+         node.target = self.parse_assign_target(name_only=True).name
+         return self.parse_import_context(node, False)
+ 
+     def parse_from(self) -> nodes.FromImport:
+-        node = nodes.FromImport(lineno=next(self.stream).lineno)
++        node = nodes.FromImport(None, [], None, lineno=next(self.stream).lineno)
+         node.template = self.parse_expression()
+         self.stream.expect("name:import")
+         node.names = []
+@@ -437,7 +437,7 @@ class Parser:
+         return node
+ 
+     def parse_macro(self) -> nodes.Macro:
+-        node = nodes.Macro(lineno=next(self.stream).lineno)
++        node = nodes.Macro(None, [], [], None, lineno=next(self.stream).lineno)
+         node.name = self.parse_assign_target(name_only=True).name
+         self.parse_signature(node)
+         node.body = self.parse_statements(("name:endmacro",), drop_needle=True)
+diff --git a/src/jinja2/runtime.py b/src/jinja2/runtime.py
+index a7117d8..87bd243 100644
+--- a/src/jinja2/runtime.py
++++ b/src/jinja2/runtime.py
+@@ -703,7 +703,7 @@ class Macro:
+         # argument to callables otherwise anyway.  Worst case here is
+         # that if no eval context is passed we fall back to the compile
+         # time autoescape flag.
+-        if args or isinstance(args[0], EvalContext):
++        if args and isinstance(args[0], EvalContext):
+             autoescape = args[0].autoescape
+             args = args[1:]
+         else:
