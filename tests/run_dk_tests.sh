@@ -582,13 +582,17 @@ if [ "$wrote_a" = "yes" ] \
    && printf '%s' "$out" | grep -q "Self-steering - check before acting" \
    && printf '%s' "$out_a" | grep -q "sibling chat verdict"; then ok; else bad "B saw: $out"; fi
 
-t "55. empty selection = nothing live -> injects NOTHING (not the static note)"
+t "55. empty selection = nothing live -> the static note still injects (muting bug, 2026-08-31)"
+# An empty monitor verdict must not silence dk-mode: on swe run 2 the agent
+# stalled three turns while an empty selection suppressed every nudge.
+# Empty falls through to the static distilled note; only a non-empty
+# selection replaces it (dk_recall.sh, "Empty falls through").
 watch_sandbox
 start_watch_mock '{"active":[],"alert":null}'
 run_watch "$FIX/transcript_doneclaim.jsonl"; stop_mock
 out=$(run_recall)
 if [ ! -s "$ACTIVEF" ] \
-   && ! printf '%s' "$out" | grep -q "self-steering"; then ok; else bad "out: $out"; fi
+   && printf '%s' "$out" | grep -q "self-steering"; then ok; else bad "out: $out"; fi
 
 t "56. a situational alert is injected above the rules"
 watch_sandbox
